@@ -119,13 +119,14 @@ A chave primária é composta por `(id_atendimento, id_procedimento)`.
 |---|---|---|
 | id_escala | PK | — |
 | id_unidade | FK | UNIDADE(id_unidade) |
-| dia_semana | — | Segunda a domingo |
 | turno | — | Manhã, tarde ou noite |
 | data_plantao | — | Data que permite consultas mensais |
 | id_atuacao_residente | FK | ATUACAO_RESIDENTE(id_atuacao) |
 | id_atuacao_preceptor | FK | ATUACAO_PRECEPTOR(id_atuacao) |
 
 Restrição aprovada: `UQ (id_unidade, data_plantao, turno, id_atuacao_residente)`. As atuações devem estar vigentes em `data_plantao`.
+
+`dia_semana` é informação derivada de `data_plantao` e pode ser exibida em consultas, mas não integra a relação armazenada para evitar redundância.
 
 ## Especializações e cardinalidades
 

@@ -14,7 +14,7 @@ O modelo abaixo traduz o DER ampliado para relações. Tipos físicos e sintaxe 
 | ATENDIMENTO | id_atendimento, data_hora, duracao_minutos, id_paciente, id_atuacao_residente, id_atuacao_preceptor, id_unidade | id_atendimento | id_paciente → PACIENTE(id_pessoa); id_atuacao_residente → ATUACAO_RESIDENTE(id_atuacao); id_atuacao_preceptor → ATUACAO_PRECEPTOR(id_atuacao); id_unidade → UNIDADE(id_unidade) | duração positiva; FKs obrigatórias; atuações vigentes em data_hora |
 | PROCEDIMENTO | id_procedimento, codigo, nome, tempo_medio_minutos, nivel_risco | id_procedimento | — | codigo único; tempo médio positivo; risco em BAIXO, MEDIO ou ALTO |
 | PROCEDIMENTO_REALIZADO | id_atendimento, id_procedimento, quantidade, tempo_real_minutos, observacao, faturado | (id_atendimento, id_procedimento) | id_atendimento → ATENDIMENTO(id_atendimento); id_procedimento → PROCEDIMENTO(id_procedimento) | quantidade e tempo real positivos; faturado padrão falso |
-| ESCALA | id_escala, id_unidade, dia_semana, turno, data_plantao, id_atuacao_residente, id_atuacao_preceptor | id_escala | id_unidade → UNIDADE(id_unidade); id_atuacao_residente → ATUACAO_RESIDENTE(id_atuacao); id_atuacao_preceptor → ATUACAO_PRECEPTOR(id_atuacao) | UNIQUE(id_unidade, data_plantao, turno, id_atuacao_residente); domínios de dia e turno; atuações vigentes na data |
+| ESCALA | id_escala, id_unidade, turno, data_plantao, id_atuacao_residente, id_atuacao_preceptor | id_escala | id_unidade → UNIDADE(id_unidade); id_atuacao_residente → ATUACAO_RESIDENTE(id_atuacao); id_atuacao_preceptor → ATUACAO_PRECEPTOR(id_atuacao) | UNIQUE(id_unidade, data_plantao, turno, id_atuacao_residente); domínio de turno; atuações vigentes na data |
 
 ## Mapeamento das especializações
 
@@ -29,6 +29,7 @@ ATUACAO_RESIDENTE e ATUACAO_PRECEPTOR usam a chave de ATUACAO_PROFISSIONAL como 
 - OCORRE_EM é materializado por `id_unidade` em ATENDIMENTO.
 - PROCEDIMENTO_REALIZADO materializa o relacionamento N:N entre ATENDIMENTO e PROCEDIMENTO e mantém seus atributos próprios.
 - ACONTECE_EM, ESCALADO_EM e SUPERVISIONA_PLANTAO são materializados pelas três FKs de ESCALA.
+- `dia_semana` é calculado a partir de `data_plantao` em consultas e não é armazenado na relação normalizada.
 
 ## Regras que excedem constraints simples
 
