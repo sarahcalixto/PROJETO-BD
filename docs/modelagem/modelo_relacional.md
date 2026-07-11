@@ -1,23 +1,35 @@
-# Modelo relacional
+# Modelo relacional — versão 2.0
 
-Este documento organiza a tradução do DER aprovado para relações. Ele descreve a modelagem, não contém comandos SQL.
+O modelo abaixo traduz o DER ampliado para relações. Tipos físicos e sintaxe SQL pertencem à etapa de implementação.
 
-| Tabela | Atributos | PK | FKs | Constraints | Observações |
-|---|---|---|---|---|---|
-| PESSOA | id_pessoa, nome, cpf, data_nascimento, is_flamengo, telefone | id_pessoa | — | A definir | Supertipo de paciente e profissional |
-| PACIENTE | id_pessoa, num_convenio, alergias, grupo_sanguineo | id_pessoa | id_pessoa → PESSOA(id_pessoa) | A definir | Especialização com PK compartilhada |
-| PROFISSIONAL | id_pessoa, crm, data_admissao, especialidade | id_pessoa | id_pessoa → PESSOA(id_pessoa) | A definir | Supertipo de residente e preceptor |
-| PRECEPTOR | id_profissional, titulacao | id_profissional | id_profissional → PROFISSIONAL(id_pessoa) | A definir | Especialização com PK compartilhada |
-| RESIDENTE | id_profissional, ano_residencia | id_profissional | id_profissional → PROFISSIONAL(id_pessoa) | A definir | Especialização com PK compartilhada |
-| UNIDADE | id_unidade, nome, tipo, capacidade_leitos | id_unidade | — | A definir | Unidade hospitalar |
-| ATENDIMENTO | id_atendimento, data_hora, duracao_minutos, id_paciente, id_residente, id_preceptor | id_atendimento | id_paciente → PACIENTE; id_residente → RESIDENTE; id_preceptor → PRECEPTOR | A definir | Associação com unidade ainda pendente |
-| PROCEDIMENTO | id_procedimento, codigo, nome, tempo_medio_minutos | id_procedimento | — | A definir | Nível de risco ainda pendente |
-| PROCEDIMENTO_REALIZADO | id_atendimento, id_procedimento, quantidade, tempo_real_minutos, observacao | (id_atendimento, id_procedimento) | id_atendimento → ATENDIMENTO; id_procedimento → PROCEDIMENTO | PK composta | Faturamento ainda pendente |
-| ESCALA | id_escala, id_unidade, dia_semana, turno, id_residente, id_preceptor | id_escala | id_unidade → UNIDADE; id_residente → RESIDENTE; id_preceptor → PRECEPTOR | UNIQUE(id_unidade, dia_semana, turno, id_residente) | Data ou vigência ainda pendente |
+| Relação | Atributos | Chave primária | Chaves estrangeiras | Restrições principais |
+|---|---|---|---|---|
+| PESSOA | id_pessoa, nome, cpf, data_nascimento, is_flamengo, telefone | id_pessoa | — | cpf único |
+| PACIENTE | id_pessoa, num_convenio, alergias, grupo_sanguineo | id_pessoa | id_pessoa → PESSOA(id_pessoa) | PK compartilhada com PESSOA |
+| PROFISSIONAL | id_pessoa, crm, data_admissao, especialidade | id_pessoa | id_pessoa → PESSOA(id_pessoa) | crm único; PK compartilhada com PESSOA |
+| ATUACAO_PROFISSIONAL | id_atuacao, id_profissional, data_inicio, data_fim | id_atuacao | id_profissional → PROFISSIONAL(id_pessoa) | data_fim ausente ou posterior/igual a data_inicio; períodos do mesmo profissional não se sobrepõem |
+| ATUACAO_RESIDENTE | id_atuacao, ano_residencia | id_atuacao | id_atuacao → ATUACAO_PROFISSIONAL(id_atuacao) | ano_residencia em R1, R2 ou R3; PK compartilhada |
+| ATUACAO_PRECEPTOR | id_atuacao, titulacao | id_atuacao | id_atuacao → ATUACAO_PROFISSIONAL(id_atuacao) | PK compartilhada |
+| UNIDADE | id_unidade, nome, tipo, capacidade_leitos | id_unidade | — | tipo no domínio aprovado; capacidade_leitos não negativa |
+| ATENDIMENTO | id_atendimento, data_hora, duracao_minutos, id_paciente, id_atuacao_residente, id_atuacao_preceptor, id_unidade | id_atendimento | id_paciente → PACIENTE(id_pessoa); id_atuacao_residente → ATUACAO_RESIDENTE(id_atuacao); id_atuacao_preceptor → ATUACAO_PRECEPTOR(id_atuacao); id_unidade → UNIDADE(id_unidade) | duração positiva; FKs obrigatórias; atuações vigentes em data_hora |
+| PROCEDIMENTO | id_procedimento, codigo, nome, tempo_medio_minutos, nivel_risco | id_procedimento | — | codigo único; tempo médio positivo; risco em BAIXO, MEDIO ou ALTO |
+| PROCEDIMENTO_REALIZADO | id_atendimento, id_procedimento, quantidade, tempo_real_minutos, observacao, faturado | (id_atendimento, id_procedimento) | id_atendimento → ATENDIMENTO(id_atendimento); id_procedimento → PROCEDIMENTO(id_procedimento) | quantidade e tempo real positivos; faturado padrão falso |
+| ESCALA | id_escala, id_unidade, dia_semana, turno, data_plantao, id_atuacao_residente, id_atuacao_preceptor | id_escala | id_unidade → UNIDADE(id_unidade); id_atuacao_residente → ATUACAO_RESIDENTE(id_atuacao); id_atuacao_preceptor → ATUACAO_PRECEPTOR(id_atuacao) | UNIQUE(id_unidade, data_plantao, turno, id_atuacao_residente); domínios de dia e turno; atuações vigentes na data |
 
-## Revisões necessárias antes da implementação
+## Mapeamento das especializações
 
-- Confirmar tipos, nulabilidade, domínios e regras de exclusão/atualização das FKs.
-- Resolver os itens de `docs/decisoes_pendentes.md`.
-- Conferir a correspondência entre este documento, o DER e o contrato do modelo.
-- Registrar justificativas de cardinalidade e especialização junto ao DER aprovado.
+PACIENTE e PROFISSIONAL usam a chave de PESSOA como PK e FK. Como a especialização é parcial e sobreposta, uma PESSOA pode não aparecer em nenhuma dessas relações ou aparecer nas duas.
+
+ATUACAO_RESIDENTE e ATUACAO_PRECEPTOR usam a chave de ATUACAO_PROFISSIONAL como PK e FK. A especialização é total e disjunta: cada atuação deve aparecer em exatamente uma das duas relações.
+
+## Mapeamento dos relacionamentos
+
+- RECEBE é materializado por `id_paciente` em ATENDIMENTO.
+- REALIZA e SUPERVISIONA são materializados pelas FKs de atuação em ATENDIMENTO.
+- OCORRE_EM é materializado por `id_unidade` em ATENDIMENTO.
+- PROCEDIMENTO_REALIZADO materializa o relacionamento N:N entre ATENDIMENTO e PROCEDIMENTO e mantém seus atributos próprios.
+- ACONTECE_EM, ESCALADO_EM e SUPERVISIONA_PLANTAO são materializados pelas três FKs de ESCALA.
+
+## Regras que excedem constraints simples
+
+A especialização total/disjunta, a ausência de sobreposição de atuações e a vigência da atuação nas datas referenciadas exigem validação transacional, trigger ou mecanismo equivalente na implementação física. Este documento apenas formaliza essas regras.
