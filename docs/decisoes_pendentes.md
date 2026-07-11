@@ -1,37 +1,30 @@
-# Decisões pendentes da modelagem
+# Registro de decisões da modelagem
 
-Os itens abaixo evidenciam lacunas entre o enunciado e o contrato inicial. São propostas para discussão, não alterações autorizadas. Até aprovação explícita, nenhum atributo deve ser incorporado ao DER, ao modelo relacional ou ao SQL.
+## Decisões resolvidas na versão 2.0
 
-## 1. Endereço do paciente
+| Tema | Decisão | Justificativa |
+|---|---|---|
+| Endereço do paciente | Não incluir | O CRUD permite atualizar endereço **ou** convênio; `num_convenio` atende à operação solicitada sem inventar estrutura de endereço. |
+| Faturamento | Incluir `faturado` em PROCEDIMENTO_REALIZADO | Permite impedir a remoção de um procedimento já faturado. |
+| Nível de risco | Incluir `nivel_risco` em PROCEDIMENTO | Permite consultar pacientes sem procedimentos de risco ALTO. |
+| Escala mensal | Incluir `data_plantao` em ESCALA | Permite filtrar e agregar plantões por mês. |
+| Unidade do atendimento | Relacionar ATENDIMENTO a UNIDADE | Suporta estatísticas por unidade e os requisitos futuros. |
+| Histórico profissional | Criar ATUACAO_PROFISSIONAL e suas especializações | Permite que um profissional mude de papel ao longo do tempo sem ocupar os dois papéis na mesma atuação. |
 
-O requisito prevê atualização de endereço, mas PACIENTE e PESSOA não possuem esse atributo.
+## Regras derivadas
 
-**Decisão necessária:** definir se o endereço será um atributo simples, um conjunto de atributos ou uma relação própria, e se pertence a PESSOA ou apenas a PACIENTE.
+- A especialização de PESSOA é parcial e sobreposta.
+- A especialização de ATUACAO_PROFISSIONAL é total e disjunta.
+- Atendimento e escala referenciam a atuação específica, e não somente o profissional.
+- A combinação `(id_unidade, data_plantao, turno, id_atuacao_residente)` é única na escala.
 
-## 2. Faturamento
+## Pontos para a implementação física
 
-A regra de remoção de procedimento depende de saber se o registro já foi faturado, informação ausente em PROCEDIMENTO_REALIZADO.
+Não são decisões conceituais pendentes, mas exigirão mecanismos no PostgreSQL:
 
-**Sugestão para avaliação:** `faturado BOOLEAN NOT NULL DEFAULT FALSE` em PROCEDIMENTO_REALIZADO.
+- validar que `data_fim` não precede `data_inicio`;
+- impedir sobreposição de atuações do mesmo profissional;
+- assegurar que as atuações estejam vigentes no atendimento e no plantão;
+- garantir que toda ATUACAO_PROFISSIONAL pertença a exatamente um subtipo.
 
-## 3. Nível de risco
-
-Uma consulta analítica exige identificar procedimentos com risco `ALTO`, mas PROCEDIMENTO não registra risco.
-
-**Sugestão para avaliação:** atributo `nivel_risco` em PROCEDIMENTO, com domínio `BAIXO`, `MEDIO` e `ALTO`.
-
-## 4. Escala por mês
-
-A consulta mensal de escalas não pode ser respondida apenas com `dia_semana` e `turno`.
-
-**Sugestões para avaliação:** adicionar `data_plantao` ou representar um período de vigência. O grupo deve escolher uma alternativa antes da implementação.
-
-## 5. Atendimento por unidade
-
-Consultas futuras demandam identificar em qual unidade ocorreu um atendimento, mas ATENDIMENTO não referencia UNIDADE.
-
-**Sugestão para avaliação:** `id_unidade FK -> UNIDADE` em ATENDIMENTO.
-
-## Registro de aprovação
-
-Quando o grupo decidir cada ponto, registrar aqui a decisão, a justificativa, a data e os participantes; em seguida, atualizar de forma consistente o contrato, o DER, o modelo relacional e a normalização.
+Essas regras devem ser tratadas pelo integrante responsável pelo SQL, sem implementação nesta branch.
