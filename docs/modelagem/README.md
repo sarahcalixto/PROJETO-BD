@@ -2,17 +2,17 @@
 
 ## Diagrama Entidade-Relacionamento
 
-O DER será elaborado manualmente pela Sarah no [diagrams.net](https://www.diagrams.net/).
+O DER foi elaborado pela Sarah no [diagrams.net](https://www.diagrams.net/) e está disponível nos formatos editável e de entrega.
 
-- Salvar o arquivo editável nesta pasta com o nome `der_hospital.drawio`.
-- Exportar a versão destinada à entrega como `der_hospital.pdf` nesta mesma pasta.
+- `der_hospital.drawio`: fonte editável do diagrama.
+- `der_hospital.pdf`: entrega com o DER e as justificativas de cardinalidades e especializações.
 - Manter o arquivo `.drawio` versionado para permitir futuras correções.
 - Não substituir o arquivo editável pelo PDF: os dois artefatos têm finalidades diferentes.
 - Conferir se entidades, atributos, cardinalidades e especializações correspondem ao contrato do modelo antes da exportação.
 
-Os arquivos `.drawio` e `.pdf` não são criados como placeholders, pois devem conter o diagrama real revisado.
+O PDF possui duas páginas: o diagrama na primeira e as justificativas na segunda.
 
 ## Outros documentos
 
-- `modelo_relacional.md`: tradução organizada das entidades e relacionamentos.
-- `normalizacao.md`: roteiro da análise até a Terceira Forma Normal.
+- `modelo_relacional.md`: tradução completa das entidades e relacionamentos.
+- `normalizacao.md`: análise das relações até a Terceira Forma Normal.

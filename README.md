@@ -61,6 +61,8 @@ Os testes iniciais validam apenas o carregamento seguro da configuração; não 
 │   ├── decisoes_pendentes.md
 │   ├── modelagem/
 │   │   ├── README.md
+│   │   ├── der_hospital.drawio
+│   │   ├── der_hospital.pdf
 │   │   ├── modelo_relacional.md
 │   │   └── normalizacao.md
 │   └── requisitos/requisitos_etapa_1.md
@@ -94,7 +96,7 @@ Os arquivos SQL são apenas reservas nesta branch e devem ser preenchidos exclus
 
 ## DER
 
-O diagrama deve ser criado no diagrams.net. Salve o editável como `docs/modelagem/der_hospital.drawio` e exporte a entrega como `docs/modelagem/der_hospital.pdf`. Os dois arquivos devem ser mantidos: o PDF não substitui a fonte editável. Consulte `docs/modelagem/README.md` antes de versioná-los.
+O diagrama foi criado no diagrams.net e está versionado como `docs/modelagem/der_hospital.drawio`. A entrega `docs/modelagem/der_hospital.pdf` inclui o DER e as justificativas de cardinalidades e especializações. Os dois arquivos devem ser mantidos: o PDF não substitui a fonte editável.
 
 ## Branches e commits
 
