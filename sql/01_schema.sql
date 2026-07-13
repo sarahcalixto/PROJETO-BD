@@ -1,24 +1,34 @@
+--- 
+
+create type grupo_sanguineo as enum ('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-');
+create type turno as enum ('manha', 'tarde', 'noite');
+create type risco as enum ('baixo', 'medio', 'alto');
+create type ano_residencia as enum ('R1', 'R2', 'R3');
+create type tipo_unidade as enum ('enfermaria', 'uti','ambulatorio');
+
+---
+
 create table pessoa (
   id serial primary key,
   nome varchar(255) not null,
   cpf varchar(11) unique not null,
-  data_nascimento date,
-  is_flamengo boolean default true,
-  telefone varchar(20),
+  data_nascimento date not null,
+  is_flamengo boolean not null default true,
+  telefone text,
 );
 
 create table paciente (
   id int primary key references pessoa(id) on delete cascade,
-  num_convenio varchar(50),
-  alergias text, -- TODO: maybe we can model this better
-  grupo_sanguineo varchar(3),
+  num_convenio text,
+  alergias text, -- TODO: maybe we can model this better(?)
+  grupo_sanguineo grupo_sanguineo,
 );
 
 create table profissional (
   id int primary key references pessoa(id) on delete cascade,
-  crm varchar(20) unique,
-  data_admissao date,
-  especialidade text,
+  crm text not null unique,
+  data_admissao date not null,
+  especialidade text not null,
 );
 
 ---
@@ -58,8 +68,6 @@ create table atendimento (
   id_unidade int references unidade(id) on delete cascade,
 );
 
-create type risco as enum ('baixo', 'medio', 'alto');
-
 create table procedimento (
   id serial primary key,
   codigo int unique not null,
@@ -79,8 +87,6 @@ create table procedimento_realizado (
   primary key (id_atendimento, id_procedimento)
 );
 
-create type turno as enum ('manha', 'tarde', 'noite');
-
 create table escala (
   id serial primary key,
   id_unidade int references unidade(id),
@@ -88,4 +94,4 @@ create table escala (
   turno turno not null,
   id_atuacao_residente int references atuacao_residente(id),
   id_atuacao_preceptor int references atuacao_preceptor(id),
-)
+);
