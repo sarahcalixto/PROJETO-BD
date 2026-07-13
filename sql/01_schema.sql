@@ -20,3 +20,41 @@ create table profissional (
   data_admissao date,
   especialidade text,
 );
+
+---
+
+create table atuacao_profissional (
+  id serial primary key,
+  id_profissional int references profissional(id) on delete cascade,
+  data_inicio date,
+  data_fim date,
+);
+
+create table atuacao_residente (
+  id int primary key references atuacao_profissional(id) on delete cascade,
+  ano_residencia text -- TODO: how can we model this better?
+);
+
+create table atuacao_preceptor (
+  id int primary key references atuacao_profissional(id) on delete cascade,
+  titulacao text,
+);
+
+---
+
+create table unidade (
+  id serial primary key,
+  nome varchar(255),
+  tipo text, -- TODO: what does this represents? :/
+  capacidade_leitos int check (capacidade_leitos >= 0)
+);
+
+create table atendimento (
+  id serial primary key,
+  duracao_minutos smallint, -- TODO: we surely can make this better
+  id_paciente int references paciente(id) on delete cascade,
+  id_atuacao_residente int references atuacao_residente(id) on delete cascade,
+  id_atuacao_preceptor int references atuacao_preceptor(id) on delete cascade,
+  id_unidade int references unidade(id) on delete cascade,
+);
+
