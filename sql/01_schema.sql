@@ -5,6 +5,7 @@ create type turno as enum ('manha', 'tarde', 'noite');
 create type risco as enum ('baixo', 'medio', 'alto');
 create type ano_residencia as enum ('R1', 'R2', 'R3');
 create type tipo_unidade as enum ('enfermaria', 'uti','ambulatorio');
+create type tipo_atuacao as enum ('residente', 'preceptor');
 
 ---
 
@@ -33,11 +34,22 @@ create table profissional (
 
 ---
 
+/*
+* Um profissional pode atuar como preceptor em um determinado período
+* e como residente em outro (histórico),
+* mas em um dado momento ele ocupa apenas um papel no sistema
+* TODO: so we need to make id be disjunt from atuacao
+*/
+
 create table atuacao_profissional (
   id serial primary key,
   id_profissional int references profissional(id) on delete cascade,
-  data_inicio date,
+  tipo tipo_atuacao not null,
+  data_inicio date not null,
   data_fim date,
+
+  -- FIXME: can data_fim be null? dunno
+  constraint atuacao_periodo_valido check (data_fim is null or data_fim >= data_inicio),
 );
 
 create table atuacao_residente (
