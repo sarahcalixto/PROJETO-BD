@@ -337,3 +337,68 @@ BEGIN
         USING ERRCODE = 'no_data_found';
 END;
 $$;
+
+-- ============================================================
+-- TEMPO MÉDIO DOS ATENDIMENTOS POR ATUAÇÃO RESIDENTE
+-- ============================================================
+
+-- Finalidade:
+--   Calcular o tempo medio de duracao dos atendimentos por atuacao residente
+--   e exibir o nome do profissional associado a essa atuacao.
+--
+-- Tabelas utilizadas:
+--   ATENDIMENTO, ATUACAO_RESIDENTE, ATUACAO_PROFISSIONAL, PROFISSIONAL e
+--   PESSOA.
+--
+-- Caminho dos relacionamentos:
+--   ATENDIMENTO.id_atuacao_residente -> ATUACAO_RESIDENTE.id_atuacao
+--   ATUACAO_RESIDENTE.id_atuacao -> ATUACAO_PROFISSIONAL.id_atuacao
+--   ATUACAO_PROFISSIONAL.id_profissional -> PROFISSIONAL.id_pessoa
+--   PROFISSIONAL.id_pessoa -> PESSOA.id_pessoa
+--
+-- Campo usado para calcular a duracao:
+--   ATENDIMENTO.duracao_minutos.
+--
+-- Unidade do resultado:
+--   Minutos.
+--
+-- Tratamento de valores nulos:
+--   Atendimentos com duracao_minutos nula nao entram na media.
+--
+-- Tratamento de atendimentos ainda em andamento:
+--   O modelo armazena duracao_minutos e nao possui data/hora de termino; logo,
+--   atendimentos sem duracao preenchida sao ignorados.
+--
+-- Estrategia de agregacao:
+--   A media e calculada primeiro por id_atuacao_residente em uma subconsulta
+--   derivada. Depois o resultado agregado e associado apenas as tabelas
+--   necessarias para obter o nome do profissional, evitando multiplicar linhas
+--   de atendimento antes da agregacao.
+--
+-- Exemplo de execucao:
+--   Execute a consulta abaixo diretamente no cliente SQL.
+
+SELECT
+    medias.id_atuacao_residente,
+    pessoa.nome AS nome_profissional,
+    medias.tempo_medio_minutos
+FROM (
+    SELECT
+        id_atuacao_residente,
+        AVG(duracao_minutos) AS tempo_medio_minutos
+    FROM atendimento
+    WHERE duracao_minutos IS NOT NULL
+      AND duracao_minutos > 0
+    GROUP BY id_atuacao_residente
+) AS medias
+JOIN atuacao_residente
+    ON atuacao_residente.id_atuacao = medias.id_atuacao_residente
+JOIN atuacao_profissional
+    ON atuacao_profissional.id_atuacao = atuacao_residente.id_atuacao
+JOIN profissional
+    ON profissional.id_pessoa = atuacao_profissional.id_profissional
+JOIN pessoa
+    ON pessoa.id_pessoa = profissional.id_pessoa
+ORDER BY
+    medias.tempo_medio_minutos DESC,
+    pessoa.nome ASC;
