@@ -171,3 +171,40 @@ SELECT
 FROM atendimento
 WHERE id_paciente = :id_paciente
 ORDER BY data_hora ASC;
+
+-- LISTAGEM DE PROCEDIMENTOS DE UM ATENDIMENTO
+-- Finalidade:
+--   Listar os procedimentos realizados em um atendimento especifico,
+--   exibindo o nome do procedimento, a quantidade e o tempo real gasto.
+--
+-- Identificador esperado:
+--   id_atendimento, correspondente a ATENDIMENTO(id_atendimento) e usado
+--   diretamente em PROCEDIMENTO_REALIZADO.id_atendimento.
+--
+-- Tabela principal:
+--   PROCEDIMENTO_REALIZADO.
+--
+-- Chave usada no filtro:
+--   PROCEDIMENTO_REALIZADO.id_atendimento.
+--
+-- Chave usada no JOIN:
+--   PROCEDIMENTO.id_procedimento = PROCEDIMENTO_REALIZADO.id_procedimento.
+--
+-- Colunas retornadas:
+--   PROCEDIMENTO_REALIZADO.id_procedimento, PROCEDIMENTO.nome,
+--   PROCEDIMENTO_REALIZADO.quantidade e
+--   PROCEDIMENTO_REALIZADO.tempo_real_minutos.
+--
+-- Exemplo de execucao:
+--   Substitua :id_atendimento pelo identificador desejado ao executar no
+--   cliente SQL, ou use o mecanismo de parametro equivalente.
+
+SELECT
+    pr.id_procedimento,
+    p.nome,
+    pr.quantidade,
+    pr.tempo_real_minutos
+FROM procedimento_realizado AS pr
+JOIN procedimento AS p
+    ON p.id_procedimento = pr.id_procedimento
+WHERE pr.id_atendimento = :id_atendimento;
