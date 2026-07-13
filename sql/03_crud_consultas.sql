@@ -338,10 +338,7 @@ BEGIN
 END;
 $$;
 
--- ============================================================
 -- TEMPO MÉDIO DOS ATENDIMENTOS POR ATUAÇÃO RESIDENTE
--- ============================================================
-
 -- Finalidade:
 --   Calcular o tempo medio de duracao dos atendimentos por atuacao residente
 --   e exibir o nome do profissional associado a essa atuacao.
