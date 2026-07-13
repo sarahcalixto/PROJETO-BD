@@ -208,3 +208,56 @@ FROM procedimento_realizado AS pr
 JOIN procedimento AS p
     ON p.id_procedimento = pr.id_procedimento
 WHERE pr.id_atendimento = :id_atendimento;
+
+-- ATUALIZAÇÃO DOS DADOS DE UM PACIENTE
+-- Finalidade:
+--   Atualizar o numero do convenio de um paciente existente.
+--
+-- Parametros:
+--   p_id_paciente: identificador do paciente, correspondente a
+--   PACIENTE(id_pessoa).
+--   p_num_convenio: novo valor para PACIENTE.num_convenio.
+--
+-- Tabela envolvida:
+--   PACIENTE.
+--
+-- Campos permitidos:
+--   PACIENTE.num_convenio. A documentacao confirma que PACIENTE tambem possui
+--   alergias e grupo_sanguineo, mas nao define que esses campos devam ser
+--   atualizados nesta operacao.
+--
+-- Validacoes:
+--   A funcao localiza o paciente diretamente pela chave primaria e informa erro
+--   quando o identificador nao existe. Restrições de nulidade, unicidade ou
+--   dominio ficam a cargo do schema fisico oficial.
+--
+-- Retorno:
+--   Retorna o identificador do paciente e o numero de convenio gravado.
+--
+-- Exemplo:
+--   SELECT *
+--   FROM atualizar_num_convenio_paciente(1, 'CONV-2026-001');
+
+CREATE OR REPLACE FUNCTION atualizar_num_convenio_paciente(
+    p_id_paciente paciente.id_pessoa%TYPE,
+    p_num_convenio paciente.num_convenio%TYPE
+)
+RETURNS TABLE (
+    id_paciente paciente.id_pessoa%TYPE,
+    num_convenio paciente.num_convenio%TYPE
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    UPDATE paciente
+    SET num_convenio = p_num_convenio
+    WHERE id_pessoa = p_id_paciente
+    RETURNING paciente.id_pessoa, paciente.num_convenio;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Paciente nao encontrado: id_pessoa=%', p_id_paciente
+            USING ERRCODE = 'no_data_found';
+    END IF;
+END;
+$$;
