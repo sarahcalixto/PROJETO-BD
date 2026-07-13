@@ -137,3 +137,37 @@ BEGIN
     RETURN p_id_atendimento;
 END;
 $$;
+
+-- LISTAGEM DE ATENDIMENTOS DE UM PACIENTE
+-- Finalidade:
+--   Listar todos os atendimentos de um paciente especifico em ordem
+--   cronologica crescente.
+--
+-- Identificador esperado:
+--   id_paciente, correspondente a PACIENTE(id_pessoa) e usado diretamente em
+--   ATENDIMENTO.id_paciente.
+--
+-- Tabela principal:
+--   ATENDIMENTO.
+--
+-- Chave usada no filtro:
+--   ATENDIMENTO.id_paciente.
+--
+-- Coluna usada na ordenacao:
+--   ATENDIMENTO.data_hora ASC.
+--
+-- Exemplo de execucao:
+--   Substitua :id_paciente pelo identificador desejado ao executar no cliente
+--   SQL, ou use o mecanismo de parametro equivalente.
+
+SELECT
+    id_atendimento,
+    data_hora,
+    duracao_minutos,
+    id_paciente,
+    id_atuacao_residente,
+    id_atuacao_preceptor,
+    id_unidade
+FROM atendimento
+WHERE id_paciente = :id_paciente
+ORDER BY data_hora ASC;
