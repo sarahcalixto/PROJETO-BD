@@ -1,6 +1,7 @@
 -- Arquivo reservado para o integrante responsável.
 -- Não implementar nesta branch.
 
+-- 1° parte: 
 -- INSERÇÃO VALIDADA DE ATENDIMENTO
 -- Finalidade:
 --   Criar um atendimento somente quando as referencias obrigatorias existem
@@ -138,6 +139,7 @@ BEGIN
 END;
 $$;
 
+-- 2° parte:
 -- LISTAGEM DE ATENDIMENTOS DE UM PACIENTE
 -- Finalidade:
 --   Listar todos os atendimentos de um paciente especifico em ordem
@@ -209,6 +211,7 @@ JOIN procedimento AS p
     ON p.id_procedimento = pr.id_procedimento
 WHERE pr.id_atendimento = :id_atendimento;
 
+-- 3° parte:
 -- ATUALIZAÇÃO DOS DADOS DE UM PACIENTE
 -- Finalidade:
 --   Atualizar o numero do convenio de um paciente existente.
@@ -338,6 +341,7 @@ BEGIN
 END;
 $$;
 
+-- 4° parte:
 -- TEMPO MÉDIO DOS ATENDIMENTOS POR ATUAÇÃO RESIDENTE
 -- Finalidade:
 --   Calcular o tempo medio de duracao dos atendimentos por atuacao residente
