@@ -261,3 +261,79 @@ BEGIN
     END IF;
 END;
 $$;
+
+-- REMOÇÃO DE PROCEDIMENTO REALIZADO NÃO FATURADO
+-- Finalidade:
+--   Remover um procedimento realizado somente quando ele ainda nao estiver
+--   faturado.
+--
+-- Parametros:
+--   p_id_atendimento: identificador do atendimento.
+--   p_id_procedimento: identificador do procedimento.
+--
+-- Chave utilizada:
+--   PROCEDIMENTO_REALIZADO possui chave primaria composta por
+--   (id_atendimento, id_procedimento).
+--
+-- Regra de faturamento:
+--   A remocao so ocorre quando PROCEDIMENTO_REALIZADO.faturado = FALSE. Essa
+--   condicao faz parte do proprio DELETE.
+--
+-- Tratamento de registro inexistente:
+--   Se a chave composta nao existir, a funcao emite erro claro.
+--
+-- Tratamento de registro faturado:
+--   Se a chave composta existir, mas faturado for TRUE, a funcao bloqueia a
+--   remocao e emite erro claro.
+--
+-- Retorno:
+--   Retorna a chave composta removida e o valor de faturado removido, que sera
+--   sempre FALSE quando a operacao for bem-sucedida.
+--
+-- Exemplo:
+--   SELECT *
+--   FROM remover_procedimento_realizado_nao_faturado(1, 2);
+
+CREATE OR REPLACE FUNCTION remover_procedimento_realizado_nao_faturado(
+    p_id_atendimento procedimento_realizado.id_atendimento%TYPE,
+    p_id_procedimento procedimento_realizado.id_procedimento%TYPE
+)
+RETURNS TABLE (
+    id_atendimento procedimento_realizado.id_atendimento%TYPE,
+    id_procedimento procedimento_realizado.id_procedimento%TYPE,
+    faturado procedimento_realizado.faturado%TYPE
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    DELETE FROM procedimento_realizado AS pr
+    WHERE pr.id_atendimento = p_id_atendimento
+      AND pr.id_procedimento = p_id_procedimento
+      AND pr.faturado = FALSE
+    RETURNING pr.id_atendimento, pr.id_procedimento, pr.faturado;
+
+    IF FOUND THEN
+        RETURN;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM procedimento_realizado AS pr
+        WHERE pr.id_atendimento = p_id_atendimento
+          AND pr.id_procedimento = p_id_procedimento
+    ) THEN
+        RAISE EXCEPTION
+            'Procedimento realizado ja faturado: id_atendimento=%, id_procedimento=%',
+            p_id_atendimento,
+            p_id_procedimento
+            USING ERRCODE = 'check_violation';
+    END IF;
+
+    RAISE EXCEPTION
+        'Procedimento realizado nao encontrado: id_atendimento=%, id_procedimento=%',
+        p_id_atendimento,
+        p_id_procedimento
+        USING ERRCODE = 'no_data_found';
+END;
+$$;
