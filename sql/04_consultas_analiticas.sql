@@ -5,53 +5,50 @@
 
 SELECT 
     p.nome,
-    COUNT(a.id_atendimento) AS total_atendimentos 
-FROM PESSOA p 
-JOIN ATUACAO_PROFISSIONAL ap ON p.id_pessoa = ap.id_profissional
-JOIN ATUACAO_RESIDENTE ar ON ap.id_atuacao = ar.id_atuacao
-JOIN ATENDIMENTO a ON ar.id_atuacao = a.id_atuacao_residente
+    COUNT(a.id) AS total_atendimentos
+FROM pessoa p
+JOIN atuacao_profissional ap ON p.id = ap.id_profissional
+JOIN atuacao_residente ar ON ap.id = ar.id
+JOIN atendimento a ON ar.id = a.id_atuacao_residente
 GROUP BY 
-        p.id_pessoa,
-        p.nome
-ORDER BY
-        total_atendimentos DESC;
+    p.id, 
+    p.nome
+ORDER BY 
+    total_atendimentos DESC;
 
 -- PERCEPTORES que SUPERVISIONARAM mais de 5 ATENDIMENTOS em um determinado mês
 
 SELECT 
     p.nome,
-    COUNT(a.id_atendimento) AS total_supervisionado
-FROM PESSOA p
-JOIN ATUACAO_PROFISSIONAL ap ON p.id_pessoa = ap.id_profissional
-JOIN ATUACAO_PRECEPTOR apre ON ap.id_atuacao = apre.id_atuacao
-JOIN ATENDIMENTO a ON apre.id_atuacao = a.id_atuacao_preceptor
-WHERE 
-    EXTRACT(MONTH FROM a.data_hora) = 7 
-    AND EXTRACT(YEAR FROM a.data_hora) = 2026
+    COUNT(a.id) AS total_supervisionado
+FROM pessoa p
+JOIN atuacao_profissional ap ON p.id = ap.id_profissional
+JOIN atuacao_preceptor apre ON ap.id = apre.id
+JOIN atendimento a ON apre.id = a.id_atuacao_preceptor
 GROUP BY 
-        p.id_pessoa, 
-        p.nome
+    p.id, 
+    p.nome
 HAVING 
-    COUNT(a.id_atendimento) > 5;
+    COUNT(a.id) > 5;
 
 -- QUANTIDADE de PLANTÕES ESCALADOS por RESIDENTE no MÊS CORRENTE, por UNIDADE
 
 SELECT 
     u.nome AS unidade,
     p.nome AS residente,
-    COUNT(e.id_escala) AS quantidade_plantoes
-FROM UNIDADE u
-JOIN ESCALA e ON u.id_unidade = e.id_unidade
-JOIN ATUACAO_RESIDENTE ar ON e.id_atuacao_residente = ar.id_atuacao
-JOIN ATUACAO_PROFISSIONAL ap ON ar.id_atuacao = ap.id_atuacao
-JOIN PESSOA p ON ap.id_profissional = p.id_pessoa
+    COUNT(e.id) AS quantidade_plantoes
+FROM unidade u
+JOIN escala e ON u.id = e.id_unidade
+JOIN atuacao_residente ar ON e.id_atuacao_residente = ar.id
+JOIN atuacao_profissional ap ON ar.id = ap.id
+JOIN pessoa p ON ap.id_profissional = p.id
 WHERE 
     EXTRACT(MONTH FROM e.data_plantao) = EXTRACT(MONTH FROM CURRENT_DATE)
     AND EXTRACT(YEAR FROM e.data_plantao) = EXTRACT(YEAR FROM CURRENT_DATE)
 GROUP BY 
-    u.id_unidade, 
+    u.id, 
     u.nome, 
-    p.id_pessoa, 
+    p.id, 
     p.nome
 ORDER BY 
     u.nome ASC, 
@@ -62,16 +59,16 @@ ORDER BY
 SELECT 
     pes.nome,
     pac.num_convenio
-FROM PESSOA pes
-JOIN PACIENTE pac ON pes.id_pessoa = pac.id_pessoa
+FROM pessoa pes
+JOIN paciente pac ON pes.id = pac.id
 WHERE NOT EXISTS (
     SELECT 1
-    FROM ATENDIMENTO a
-    JOIN PROCEDIMENTO_REALIZADO pr ON a.id_atendimento = pr.id_atendimento
-    JOIN PROCEDIMENTO proc ON pr.id_procedimento = proc.id_procedimento
+    FROM atendimento a
+    JOIN procedimento_realizado pr ON a.id = pr.id_atendimento
+    JOIN procedimento proc ON pr.id_procedimento = proc.id
     WHERE 
-        a.id_paciente = pac.id_pessoa
-        AND proc.nivel_risco = 'ALTO'
+        a.id_paciente = pac.id
+        AND proc.nivel_risco = 'alto'
 );
 
 
