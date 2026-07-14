@@ -54,7 +54,7 @@ create table atuacao_profissional (
 
 create table atuacao_residente (
   id int primary key references atuacao_profissional(id) on delete cascade,
-  ano_residencia text -- TODO: how can we model this better?
+  ano_residencia ano_residencia
 );
 
 create table atuacao_preceptor (
@@ -67,7 +67,7 @@ create table atuacao_preceptor (
 create table unidade (
   id serial primary key,
   nome varchar(255),
-  tipo text, -- TODO: what does this represents? :/
+  tipo tipo_unidade,
   capacidade_leitos int check (capacidade_leitos >= 0)
 );
 
