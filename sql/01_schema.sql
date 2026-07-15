@@ -15,31 +15,36 @@ create table pessoa (
   cpf varchar(11) unique not null,
   data_nascimento date not null,
   is_flamengo boolean not null default true,
-  telefone text,
+  telefone text
 );
+
+/*
+* um paciente pode ter varias alergias
+* uma alergia pode "pertencer" a muitos pacientes
+*/
 
 create table alergia (
   id serial primary key,
-  nome varchar(255) not null unique,
+  nome varchar(255) not null unique
 );
 
 create table paciente (
   id int primary key references pessoa(id) on delete cascade,
   num_convenio text,
-  grupo_sanguineo grupo_sanguineo,
+  grupo_sanguineo grupo_sanguineo
 );
 
 create table paciente_alergia (
   id_paciente int not null references paciente(id) on delete cascade,
   id_alergia int not null references alergia(id),
   primary key (id_paciente, id_alergia)
-)
+);
 
 create table profissional (
   id int primary key references pessoa(id) on delete cascade,
   crm text not null unique,
   data_admissao date not null,
-  especialidade text not null,
+  especialidade text not null
 );
 
 ---
@@ -59,7 +64,7 @@ create table atuacao_profissional (
   data_fim date,
 
   -- FIXME: can data_fim be null? dunno
-  constraint atuacao_periodo_valido check (data_fim is null or data_fim >= data_inicio),
+  constraint atuacao_periodo_valido check (data_fim is null or data_fim >= data_inicio)
 );
 
 create table atuacao_residente (
@@ -69,7 +74,7 @@ create table atuacao_residente (
 
 create table atuacao_preceptor (
   id int primary key references atuacao_profissional(id) on delete cascade,
-  titulacao text,
+  titulacao text
 );
 
 ---
@@ -87,7 +92,7 @@ create table atendimento (
   id_paciente int references paciente(id) on delete cascade,
   id_atuacao_residente int references atuacao_residente(id) on delete cascade,
   id_atuacao_preceptor int references atuacao_preceptor(id) on delete cascade,
-  id_unidade int references unidade(id) on delete cascade,
+  id_unidade int references unidade(id) on delete cascade
 );
 
 create table procedimento (
@@ -95,7 +100,7 @@ create table procedimento (
   codigo int unique not null,
   nome varchar(255) not null,
   tempo_medio_minutos int check (tempo_medio_minutos >= 0),
-  nivel_risco risco not null,
+  nivel_risco risco not null
 );
 
 create table procedimento_realizado (
@@ -115,5 +120,5 @@ create table escala (
   data_plantao date not null,
   turno turno not null,
   id_atuacao_residente int references atuacao_residente(id),
-  id_atuacao_preceptor int references atuacao_preceptor(id),
+  id_atuacao_preceptor int references atuacao_preceptor(id)
 );
