@@ -1,6 +1,11 @@
 -- Arquivo reservado para o integrante responsável.
 -- Não implementar nesta branch.
 
+-- Utilizando LEFT JOIN para incluir dados como residentes com 0 atendimentos realizados
+-- e com 0 plantões 
+
+-- As consultas levaram 0.06s a mais que a apenas utilizando JOINS
+
 -- RANKING dos RESIDENTES por NÚMERO DE ATENDIMENTOS REALIZADOS (Mostrar nome e total)
 
 SELECT 
@@ -9,7 +14,7 @@ SELECT
 FROM pessoa p
 JOIN atuacao_profissional ap ON p.id = ap.id_profissional
 JOIN atuacao_residente ar ON ap.id = ar.id
-JOIN atendimento a ON ar.id = a.id_atuacao_residente
+LEFT JOIN atendimento a ON ar.id = a.id_atuacao_residente
 GROUP BY 
     p.id, 
     p.nome
@@ -39,13 +44,14 @@ SELECT
     p.nome AS residente,
     COUNT(e.id) AS quantidade_plantoes
 FROM unidade u
-JOIN escala e ON u.id = e.id_unidade
-JOIN atuacao_residente ar ON e.id_atuacao_residente = ar.id
-JOIN atuacao_profissional ap ON ar.id = ap.id
-JOIN pessoa p ON ap.id_profissional = p.id
-WHERE
-    e.data_plantao >= date_trunc('month', CURRENT_DATE)
+-- Mudamos o filtro de data para dentro do ON
+LEFT JOIN escala e ON u.id = e.id_unidade
+    AND e.data_plantao >= date_trunc('month', CURRENT_DATE)
     AND e.data_plantao < date_trunc('month', CURRENT_DATE) + interval '1 month'
+-- Todos os joins seguintes precisam ser LEFT para não anular o primeiro
+LEFT JOIN atuacao_residente ar ON e.id_atuacao_residente = ar.id
+LEFT JOIN atuacao_profissional ap ON ar.id = ap.id
+LEFT JOIN pessoa p ON ap.id_profissional = p.id
 GROUP BY 
     u.id, 
     u.nome, 
