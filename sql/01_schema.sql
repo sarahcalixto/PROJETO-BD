@@ -4,7 +4,7 @@ create type grupo_sanguineo as enum ('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+',
 create type turno as enum ('manha', 'tarde', 'noite');
 create type risco as enum ('baixo', 'medio', 'alto');
 create type ano_residencia as enum ('R1', 'R2', 'R3');
-create type tipo_unidade as enum ('enfermaria', 'uti','ambulatorio');
+create type tipo_unidade as enum ('enfermaria', 'uti', 'pronto-socorro', 'ambulatorio');
 create type tipo_atuacao as enum ('residente', 'preceptor');
 
 ---
@@ -107,7 +107,7 @@ create table procedimento_realizado (
   id_atendimento int references atendimento(id),
   id_procedimento int references procedimento(id),
   quantidade int check (quantidade >= 0),
-  tempo_real_minutos int check (tempo_medio_minutos >= 0),
+  tempo_real_minutos int check (tempo_real_minutos >= 0),
   observacao text,
   faturado boolean default false,
 
@@ -120,5 +120,6 @@ create table escala (
   data_plantao date not null,
   turno turno not null,
   id_atuacao_residente int references atuacao_residente(id),
-  id_atuacao_preceptor int references atuacao_preceptor(id)
+  id_atuacao_preceptor int references atuacao_preceptor(id),
+  unique (id_unidade, data_plantao, turno, id_atuacao_residente)
 );
