@@ -58,7 +58,7 @@ create table profissional (
 
 create table atuacao_profissional (
   id serial primary key,
-  id_profissional int references profissional(id) on delete cascade,
+  id_profissional int not null references profissional(id) on delete cascade,
   tipo tipo_atuacao not null,
   data_inicio date not null,
   data_fim date,
@@ -69,45 +69,45 @@ create table atuacao_profissional (
 
 create table atuacao_residente (
   id int primary key references atuacao_profissional(id) on delete cascade,
-  ano_residencia ano_residencia
+  ano_residencia ano_residencia not null
 );
 
 create table atuacao_preceptor (
   id int primary key references atuacao_profissional(id) on delete cascade,
-  titulacao text
+  titulacao text not null
 );
 
 ---
 
 create table unidade (
   id serial primary key,
-  nome varchar(255),
-  tipo tipo_unidade,
+  nome varchar(255) not null,
+  tipo tipo_unidade not null,
   capacidade_leitos int check (capacidade_leitos >= 0)
 );
 
 create table atendimento (
   id serial primary key,
-  duracao_minutos smallint, -- TODO: we surely can make this better
-  id_paciente int references paciente(id) on delete cascade,
-  id_atuacao_residente int references atuacao_residente(id) on delete cascade,
-  id_atuacao_preceptor int references atuacao_preceptor(id) on delete cascade,
-  id_unidade int references unidade(id) on delete cascade
+  duracao_minutos smallint not null, -- TODO: we surely can make this better
+  id_paciente int not null references paciente(id) on delete cascade,
+  id_atuacao_residente int not null references atuacao_residente(id) on delete cascade,
+  id_atuacao_preceptor int not null references atuacao_preceptor(id) on delete cascade,
+  id_unidade int not null references unidade(id) on delete cascade
 );
 
 create table procedimento (
   id serial primary key,
   codigo int unique not null,
   nome varchar(255) not null,
-  tempo_medio_minutos int check (tempo_medio_minutos >= 0),
+  tempo_medio_minutos int not null check (tempo_medio_minutos >= 0),
   nivel_risco risco not null
 );
 
 create table procedimento_realizado (
   id_atendimento int references atendimento(id),
   id_procedimento int references procedimento(id),
-  quantidade int check (quantidade >= 0),
-  tempo_real_minutos int check (tempo_real_minutos >= 0),
+  quantidade int not null check (quantidade >= 0),
+  tempo_real_minutos int not null check (tempo_real_minutos >= 0),
   observacao text,
   faturado boolean default false,
 
@@ -116,10 +116,10 @@ create table procedimento_realizado (
 
 create table escala (
   id serial primary key,
-  id_unidade int references unidade(id),
+  id_unidade int not null references unidade(id),
   data_plantao date not null,
   turno turno not null,
-  id_atuacao_residente int references atuacao_residente(id),
-  id_atuacao_preceptor int references atuacao_preceptor(id),
+  id_atuacao_residente int not null references atuacao_residente(id),
+  id_atuacao_preceptor int not null references atuacao_preceptor(id),
   unique (id_unidade, data_plantao, turno, id_atuacao_residente)
 );
