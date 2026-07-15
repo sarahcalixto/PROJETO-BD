@@ -178,7 +178,7 @@ SELECT
     id_atuacao_preceptor,
     id_unidade
 FROM atendimento
-WHERE id_paciente = :id_paciente
+WHERE id_paciente = %(id_paciente)s
 ORDER BY data_hora ASC;
 
 -- LISTAGEM DE PROCEDIMENTOS DE UM ATENDIMENTO
@@ -216,7 +216,7 @@ SELECT
 FROM procedimento_realizado AS pr
 JOIN procedimento AS p
     ON p.id = pr.id_procedimento -- Corrigido: p.id em vez de p.id_procedimento
-WHERE pr.id_atendimento = :id_atendimento;
+WHERE pr.id_atendimento = %(id_atendimento)s;
 
 -- 3° parte:
 -- ATUALIZAÇÃO DOS DADOS DE UM PACIENTE
