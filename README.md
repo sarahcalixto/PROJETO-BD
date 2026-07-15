@@ -28,7 +28,7 @@ O `uv sync` cria e gerencia automaticamente o ambiente virtual `.venv` com a ver
 
 ## Configuração do banco
 
-Copie `.env.example` para `.env` e ajuste os valores para sua instalação local do PostgreSQL:
+Copie `.env.example` para `.env` e ajuste os valores se necessário:
 
 ```env
 DB_HOST=localhost
@@ -44,13 +44,35 @@ O arquivo `.env` é ignorado pelo Git e nunca deve ser versionado. Para verifica
 uv run python scripts/check_environment.py
 ```
 
+### Subindo o PostgreSQL
+
+Opção recomendada (não exige instalar PostgreSQL na máquina):
+
+```bash
+docker compose up -d
+```
+
+Isso sobe um PostgreSQL 16 em `localhost:5432` com usuário/senha `postgres`, já criando os bancos `projeto_hospital` e `projeto_hospital_teste` (este último usado pelos testes de integração).
+
+Alternativa sem Docker (instalação local do PostgreSQL):
+
+```bash
+sudo pacman -S postgresql          # ou o gerenciador de pacotes da sua distro
+sudo -iu postgres initdb -D /var/lib/postgres/data
+sudo systemctl enable --now postgresql
+sudo -iu postgres psql \
+  -c "ALTER ROLE postgres WITH PASSWORD 'postgres';" \
+  -c "CREATE DATABASE projeto_hospital OWNER postgres;" \
+  -c "CREATE DATABASE projeto_hospital_teste OWNER postgres;"
+```
+
 ## Testes
 
 ```bash
 uv run pytest
 ```
 
-Os testes iniciais validam apenas o carregamento seguro da configuração; não exigem um servidor PostgreSQL ativo.
+`test_crud_consultas.py` e `test_consultas_analiticas.py` são testes de integração: recriam o schema a partir de `sql/01_schema.sql`, carregam `sql/02_dados_teste.sql` e executam as funções/consultas de `sql/03_crud_consultas.sql` e `sql/04_consultas_analiticas.sql` contra o banco `projeto_hospital_teste`. Eles são pulados automaticamente (`SKIPPED`) se esse banco não estiver acessível. As fixtures usadas por esses testes ficam em `tests/config.py`, registrado como plugin do pytest via `addopts = "-p tests.config"` em `pyproject.toml` (em vez de um `conftest.py`).
 
 ## Estrutura
 
@@ -78,14 +100,16 @@ Os testes iniciais validam apenas o carregamento seguro da configuração; não 
 │   └── database.py
 ├── tests/
 │   ├── __init__.py
-│   └── test_config.py
+│   ├── config.py
+│   ├── utils.py
+│   ├── test_crud_consultas.py
+│   └── test_consultas_analiticas.py
 ├── .env.example
 ├── .python-version
+├── docker-compose.yml
 ├── pyproject.toml
 └── uv.lock
 ```
-
-Os arquivos SQL são apenas reservas nesta branch e devem ser preenchidos exclusivamente pelos responsáveis.
 
 ## Divisão da equipe
 
