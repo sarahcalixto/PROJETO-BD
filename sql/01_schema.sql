@@ -18,12 +18,22 @@ create table pessoa (
   telefone text,
 );
 
+create table alergia (
+  id serial primary key,
+  nome varchar(255) not null unique,
+);
+
 create table paciente (
   id int primary key references pessoa(id) on delete cascade,
   num_convenio text,
-  alergias text, -- TODO: maybe we can model this better(?)
   grupo_sanguineo grupo_sanguineo,
 );
+
+create table paciente_alergia (
+  id_paciente int not null references paciente(id) on delete cascade,
+  id_alergia int not null references alergia(id),
+  primary key (id_paciente, id_alergia)
+)
 
 create table profissional (
   id int primary key references pessoa(id) on delete cascade,
