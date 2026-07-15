@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: projeto_hospital_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: projeto_hospital
+    ports:
+      - "5432:5432"
+    volumes:
+      - projeto_hospital_data:/var/lib/postgresql/data
+    configs:
+      - source: init_test_db
+        target: /docker-entrypoint-initdb.d/init-test-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  projeto_hospital_data:
+
+configs:
+  init_test_db:
+    content: |
+      CREATE DATABASE projeto_hospital_teste;

@@ -16,9 +16,10 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "pytest>=8.4.1",
+    "sqlparse>=0.5.5",
 ]
 
 [tool.pytest.ini_options]
-addopts = "-ra"
-pythonpath = ["src"]
+addopts = "-ra -p tests.config"
+pythonpath = ["src", "."]
 testpaths = ["tests"]
