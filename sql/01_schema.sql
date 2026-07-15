@@ -1,4 +1,4 @@
---- 
+---
 
 create type grupo_sanguineo as enum ('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-');
 create type turno as enum ('manha', 'tarde', 'noite');
@@ -53,7 +53,6 @@ create table profissional (
 * Um profissional pode atuar como preceptor em um determinado período
 * e como residente em outro (histórico),
 * mas em um dado momento ele ocupa apenas um papel no sistema
-* TODO: so we need to make id be disjunt from atuacao
 */
 
 create table atuacao_profissional (
@@ -64,17 +63,24 @@ create table atuacao_profissional (
   data_fim date,
 
   -- FIXME: can data_fim be null? dunno
-  constraint atuacao_periodo_valido check (data_fim is null or data_fim >= data_inicio)
+  constraint atuacao_periodo_valido check (data_fim is null or data_fim >= data_inicio),
+  constraint atuacao_id_tipo_uq unique (id, tipo)
 );
 
 create table atuacao_residente (
-  id int primary key references atuacao_profissional(id) on delete cascade,
-  ano_residencia ano_residencia not null
+  id int primary key,
+  tipo tipo_atuacao not null default 'residente' check (tipo = 'residente'),
+  ano_residencia ano_residencia not null,
+
+  foreign key (id, tipo) references atuacao_profissional (id, tipo) on delete cascade
 );
 
 create table atuacao_preceptor (
-  id int primary key references atuacao_profissional(id) on delete cascade,
-  titulacao text not null
+  id int primary key,
+  tipo tipo_atuacao not null default 'preceptor' check (tipo = 'preceptor'),
+  titulacao text not null,
+
+  foreign key (id, tipo) references atuacao_profissional (id, tipo) on delete cascade
 );
 
 ---
