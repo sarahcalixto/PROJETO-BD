@@ -25,10 +25,11 @@ FROM pessoa p
 JOIN atuacao_profissional ap ON p.id = ap.id_profissional
 JOIN atuacao_preceptor apre ON ap.id = apre.id
 JOIN atendimento a ON apre.id = a.id_atuacao_preceptor
-GROUP BY 
-    p.id, 
-    p.nome
-HAVING 
+WHERE
+    a.data_hora >= %(mes_referencia)s
+    AND a.data_hora < %(mes_referencia)s::date + interval '1 month'
+GROUP BY p.id, p.nome
+HAVING
     COUNT(a.id) > 5;
 
 -- QUANTIDADE de PLANTÕES ESCALADOS por RESIDENTE no MÊS CORRENTE, por UNIDADE
@@ -42,9 +43,9 @@ JOIN escala e ON u.id = e.id_unidade
 JOIN atuacao_residente ar ON e.id_atuacao_residente = ar.id
 JOIN atuacao_profissional ap ON ar.id = ap.id
 JOIN pessoa p ON ap.id_profissional = p.id
-WHERE 
-    EXTRACT(MONTH FROM e.data_plantao) = EXTRACT(MONTH FROM CURRENT_DATE)
-    AND EXTRACT(YEAR FROM e.data_plantao) = EXTRACT(YEAR FROM CURRENT_DATE)
+WHERE
+    e.data_plantao >= date_trunc('month', CURRENT_DATE)
+    AND e.data_plantao < date_trunc('month', CURRENT_DATE) + interval '1 month'
 GROUP BY 
     u.id, 
     u.nome, 
