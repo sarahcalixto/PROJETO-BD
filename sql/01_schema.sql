@@ -88,7 +88,8 @@ create table unidade (
 
 create table atendimento (
   id serial primary key,
-  duracao_minutos smallint not null, -- TODO: we surely can make this better
+  data_hora timestamp not null,
+  duracao_minutos smallint not null check (duracao_minutos > 0),
   id_paciente int not null references paciente(id) on delete cascade,
   id_atuacao_residente int not null references atuacao_residente(id) on delete cascade,
   id_atuacao_preceptor int not null references atuacao_preceptor(id) on delete cascade,
@@ -99,17 +100,17 @@ create table procedimento (
   id serial primary key,
   codigo int unique not null,
   nome varchar(255) not null,
-  tempo_medio_minutos int not null check (tempo_medio_minutos >= 0),
+  tempo_medio_minutos int not null check (tempo_medio_minutos > 0),
   nivel_risco risco not null
 );
 
 create table procedimento_realizado (
   id_atendimento int references atendimento(id),
   id_procedimento int references procedimento(id),
-  quantidade int not null check (quantidade >= 0),
-  tempo_real_minutos int not null check (tempo_real_minutos >= 0),
+  quantidade int not null check (quantidade > 0),
+  tempo_real_minutos int not null check (tempo_real_minutos > 0),
   observacao text,
-  faturado boolean default false,
+  faturado boolean not null default false,
 
   primary key (id_atendimento, id_procedimento)
 );
