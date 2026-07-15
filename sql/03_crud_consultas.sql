@@ -52,32 +52,80 @@ BEGIN
             USING ERRCODE = 'check_violation';
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM paciente WHERE id = p_id_paciente) THEN
+    -- CORRIGIDO: id_pessoa -> id
+    IF NOT EXISTS (
+        SELECT 1
+        FROM paciente
+        WHERE id = p_id_paciente
+    ) THEN
         RAISE EXCEPTION 'Paciente nao encontrado: id=%', p_id_paciente
             USING ERRCODE = 'foreign_key_violation';
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM atuacao_residente WHERE id = p_id_atuacao_residente) THEN
+    -- CORRIGIDO: id_atuacao -> id
+    IF NOT EXISTS (
+        SELECT 1
+        FROM atuacao_residente
+        WHERE id = p_id_atuacao_residente
+    ) THEN
         RAISE EXCEPTION 'Atuacao residente nao encontrada: id=%', p_id_atuacao_residente
             USING ERRCODE = 'foreign_key_violation';
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM atuacao_preceptor WHERE id = p_id_atuacao_preceptor) THEN
+    -- CORRIGIDO: id_atuacao -> id
+    IF NOT EXISTS (
+        SELECT 1
+        FROM atuacao_preceptor
+        WHERE id = p_id_atuacao_preceptor
+    ) THEN
         RAISE EXCEPTION 'Atuacao preceptora nao encontrada: id=%', p_id_atuacao_preceptor
             USING ERRCODE = 'foreign_key_violation';
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM unidade WHERE id = p_id_unidade) THEN
+    -- CORRIGIDO: id_unidade -> id
+    IF NOT EXISTS (
+        SELECT 1
+        FROM unidade
+        WHERE id = p_id_unidade
+    ) THEN
         RAISE EXCEPTION 'Unidade nao encontrada: id=%', p_id_unidade
             USING ERRCODE = 'foreign_key_violation';
     END IF;
 
-    -- Validações de data_hora foram removidas por incompatibilidade com o DDL
-    -- (atendimento não possui data_hora e não podemos validar a vigência sem ela)
+    -- CORRIGIDO: id_atuacao -> id
+    IF NOT EXISTS (
+        SELECT 1
+        FROM atuacao_profissional
+        WHERE id = p_id_atuacao_residente
+          AND data_inicio <= p_data_hora
+          AND (data_fim IS NULL OR p_data_hora <= data_fim)
+    ) THEN
+        RAISE EXCEPTION
+            'Atuacao residente % nao esta vigente em %.',
+            p_id_atuacao_residente,
+            p_data_hora
+            USING ERRCODE = 'check_violation';
+    END IF;
 
+    -- CORRIGIDO: id_atuacao -> id
+    IF NOT EXISTS (
+        SELECT 1
+        FROM atuacao_profissional
+        WHERE id = p_id_atuacao_preceptor
+          AND data_inicio <= p_data_hora
+          AND (data_fim IS NULL OR p_data_hora <= data_fim)
+    ) THEN
+        RAISE EXCEPTION
+            'Atuacao preceptora % nao esta vigente em %.',
+            p_id_atuacao_preceptor,
+            p_data_hora
+            USING ERRCODE = 'check_violation';
+    END IF;
+
+    -- CORRIGIDO: Inserindo no campo 'id'
     INSERT INTO atendimento (
-        id, -- Corrigido
-        -- data_hora, -- Corrigido
+        id,
+        data_hora,
         duracao_minutos,
         id_paciente,
         id_atuacao_residente,
@@ -86,7 +134,7 @@ BEGIN
     )
     VALUES (
         p_id_atendimento,
-        -- p_data_hora,
+        p_data_hora,
         p_duracao_minutos,
         p_id_paciente,
         p_id_atuacao_residente,
@@ -122,7 +170,7 @@ $$;
 --   SQL, ou use o mecanismo de parametro equivalente.
 
 SELECT
-    id_atendimento,
+    id AS id_atendimento, -- CORRIGIDO: No DDL a coluna é 'id'. Usamos ALIAS para manter a saída esperada
     data_hora,
     duracao_minutos,
     id_paciente,
@@ -167,7 +215,7 @@ SELECT
     pr.tempo_real_minutos
 FROM procedimento_realizado AS pr
 JOIN procedimento AS p
-    ON p.id_procedimento = pr.id_procedimento
+    ON p.id = pr.id_procedimento -- Corrigido: p.id em vez de p.id_procedimento
 WHERE pr.id_atendimento = :id_atendimento;
 
 -- 3° parte:
@@ -201,11 +249,11 @@ WHERE pr.id_atendimento = :id_atendimento;
 --   FROM atualizar_num_convenio_paciente(1, 'CONV-2026-001');
 
 CREATE OR REPLACE FUNCTION atualizar_num_convenio_paciente(
-    p_id_paciente paciente.id_pessoa%TYPE,
+    p_id_paciente paciente.id%TYPE, -- Corrigido
     p_num_convenio paciente.num_convenio%TYPE
 )
 RETURNS TABLE (
-    id_paciente paciente.id_pessoa%TYPE,
+    id_paciente paciente.id%TYPE, -- Corrigido
     num_convenio paciente.num_convenio%TYPE
 )
 LANGUAGE plpgsql
@@ -214,11 +262,11 @@ BEGIN
     RETURN QUERY
     UPDATE paciente
     SET num_convenio = p_num_convenio
-    WHERE id_pessoa = p_id_paciente
-    RETURNING paciente.id_pessoa, paciente.num_convenio;
+    WHERE id = p_id_paciente -- Corrigido
+    RETURNING paciente.id, paciente.num_convenio; -- Corrigido
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Paciente nao encontrado: id_pessoa=%', p_id_paciente
+        RAISE EXCEPTION 'Paciente nao encontrado: id=%', p_id_paciente
             USING ERRCODE = 'no_data_found';
     END IF;
 END;
@@ -351,14 +399,16 @@ FROM (
       AND duracao_minutos > 0
     GROUP BY id_atuacao_residente
 ) AS medias
+-- CORRIGIDO: Todas as junções agora usam a coluna física 'id'
 JOIN atuacao_residente
-    ON atuacao_residente.id_atuacao = medias.id_atuacao_residente
+    ON atuacao_residente.id = medias.id_atuacao_residente
 JOIN atuacao_profissional
-    ON atuacao_profissional.id_atuacao = atuacao_residente.id_atuacao
+    ON atuacao_profissional.id = atuacao_residente.id
 JOIN profissional
-    ON profissional.id_pessoa = atuacao_profissional.id_profissional
+    ON profissional.id = atuacao_profissional.id_profissional
 JOIN pessoa
-    ON pessoa.id_pessoa = profissional.id_pessoa
+    ON pessoa.id = profissional.id
 ORDER BY
     medias.tempo_medio_minutos DESC,
     pessoa.nome ASC;
+
