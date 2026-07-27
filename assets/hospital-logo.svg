@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="248" height="40" viewBox="0 0 248 40" role="img" aria-labelledby="title description">
+  <title id="title">Hospital Dra. Yuska Maritan Brito</title>
+  <desc id="description">Marca do hospital com edifício e cruz médica</desc>
+  <rect width="248" height="40" rx="8" fill="#EFF6F6"/>
+  <g transform="translate(3 3)">
+    <rect x="2" y="8" width="27" height="24" rx="3" fill="#D9E9E9" stroke="#0F766E" stroke-width="1.5"/>
+    <rect x="10" y="2" width="13" height="12" rx="2" fill="#FFFFFF" stroke="#0F766E" stroke-width="1.5"/>
+    <path d="M14.5 4.5h4v3h3v4h-3v3h-4v-3h-3v-4h3z" fill="#E34B5F"/>
+    <path d="M7 18h4v4H7zm7 0h4v4h-4zm7 0h4v4h-4zM7 25h4v4H7zm14 0h4v4h-4z" fill="#6F959B"/>
+    <rect x="14" y="25" width="4" height="7" rx="1" fill="#0F766E"/>
+  </g>
+  <text x="42" y="17" fill="#17343F" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700">Hospital</text>
+  <text x="42" y="32" fill="#5E7A83" font-family="Arial, Helvetica, sans-serif" font-size="10.5">Dra. Yuska Maritan Brito</text>
+</svg>
