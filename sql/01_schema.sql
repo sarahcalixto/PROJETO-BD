@@ -107,7 +107,9 @@ create table procedimento (
   codigo int unique not null,
   nome varchar(255) not null,
   tempo_medio_minutos int not null check (tempo_medio_minutos > 0),
-  nivel_risco risco not null
+  nivel_risco risco not null,
+  media_tempo_procedimento numeric(10, 2)
+    check (media_tempo_procedimento is null or media_tempo_procedimento > 0)
 );
 
 create table procedimento_realizado (
@@ -115,6 +117,7 @@ create table procedimento_realizado (
   id_procedimento int references procedimento(id),
   quantidade int not null check (quantidade > 0),
   tempo_real_minutos int not null check (tempo_real_minutos > 0),
+  data_hora_inicio timestamp not null,
   observacao text,
   faturado boolean not null default false,
 
@@ -129,4 +132,30 @@ create table escala (
   id_atuacao_residente int not null references atuacao_residente(id),
   id_atuacao_preceptor int not null references atuacao_preceptor(id),
   unique (id_unidade, data_plantao, turno, id_atuacao_residente)
+);
+
+create table internacao (
+  id serial primary key,
+  id_paciente int not null references paciente(id),
+  id_unidade int not null references unidade(id),
+  data_hora_entrada timestamp not null,
+  data_hora_saida timestamp,
+
+  constraint internacao_periodo_valido check (
+    data_hora_saida is null or data_hora_saida >= data_hora_entrada
+  )
+);
+
+create unique index internacao_paciente_ativa_uq
+  on internacao (id_paciente)
+  where data_hora_saida is null;
+
+create table auditoria_atendimento (
+  id_auditoria bigserial primary key,
+  id_atendimento int not null,
+  operacao varchar(6) not null check (operacao in ('INSERT', 'UPDATE', 'DELETE')),
+  usuario text not null,
+  data_hora timestamp with time zone not null default current_timestamp,
+  dados_antigos jsonb,
+  dados_novos jsonb
 );

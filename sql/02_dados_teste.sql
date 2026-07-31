@@ -162,18 +162,19 @@ INSERT INTO atendimento (
 -- (pacientes 1, 3 e 5 permanecem elegiveis)
 
 INSERT INTO procedimento_realizado (
-  id_atendimento, id_procedimento, quantidade, tempo_real_minutos, observacao, faturado
+  id_atendimento, id_procedimento, quantidade, tempo_real_minutos,
+  data_hora_inicio, observacao, faturado
 ) VALUES
-  (1,  1, 1, 25, 'Sutura simples sem intercorrencias', true),
-  (2,  2, 1, 10, 'Coleta de rotina',                   false),
-  (3,  3, 2, 15, 'Duas doses aplicadas',               false),
-  (4,  4, 1, 50, 'Intubacao em contexto de urgencia',  false),
-  (5,  5, 1, 20, 'Curativo pos-cirurgico',             false),
-  (6,  1, 1, 22, 'Sutura de retorno',                  false),
-  (7,  6, 1, 45, 'Drenagem sem intercorrencias',       false),
-  (8,  2, 1, 8,  'Coleta adicional para exame',        false),
-  (9,  3, 1, 12, 'Aplicacao unica',                    false),
-  (10, 5, 1, 18, 'Curativo de rotina',                 false);
+  (1,  1, 1, 25, date_trunc('month', CURRENT_DATE) + interval '1 day 08:05', 'Sutura simples sem intercorrencias', true),
+  (2,  2, 1, 10, date_trunc('month', CURRENT_DATE) + interval '1 day 09:08', 'Coleta de rotina',                   false),
+  (3,  3, 2, 15, date_trunc('month', CURRENT_DATE) + interval '2 day 10:12', 'Duas doses aplicadas',               false),
+  (4,  4, 1, 50, date_trunc('month', CURRENT_DATE) + interval '2 day 11:03', 'Intubacao em contexto de urgencia',  false),
+  (5,  5, 1, 20, date_trunc('month', CURRENT_DATE) + interval '3 day 08:40', 'Curativo pos-cirurgico',             false),
+  (6,  1, 1, 22, date_trunc('month', CURRENT_DATE) + interval '3 day 09:38', 'Sutura de retorno',                  false),
+  (7,  6, 1, 45, date_trunc('month', CURRENT_DATE) + interval '4 day 08:06', 'Drenagem sem intercorrencias',       false),
+  (8,  2, 1, 8,  date_trunc('month', CURRENT_DATE) + interval '4 day 09:15', 'Coleta adicional para exame',       false),
+  (9,  3, 1, 12, date_trunc('month', CURRENT_DATE) + interval '5 day 08:07', 'Aplicacao unica',                    false),
+  (10, 5, 1, 18, date_trunc('month', CURRENT_DATE) + interval '5 day 09:11', 'Curativo de rotina',                 false);
 
 -- ESCALA -------------------------------------------------------------------
 -- residente da atuacao 1 com 2 plantoes na mesma unidade
@@ -187,5 +188,15 @@ INSERT INTO escala (
   (2, (date_trunc('month', CURRENT_DATE) + interval '3 day')::date, 'manha', 3, 6),
   (3, (date_trunc('month', CURRENT_DATE) + interval '2 day')::date, 'tarde', 4, 8),
   (3, (date_trunc('month', CURRENT_DATE) + interval '4 day')::date, 'manha', 5, 7);
+
+-- INTERNACAO ------------------------------------------------------------
+-- Pacientes 1 e 3 estao internados; o paciente 2 possui apenas alta anterior.
+
+INSERT INTO internacao (
+  id_paciente, id_unidade, data_hora_entrada, data_hora_saida
+) VALUES
+  (1, 1, CURRENT_TIMESTAMP - interval '2 days', NULL),
+  (2, 2, CURRENT_TIMESTAMP - interval '10 days', CURRENT_TIMESTAMP - interval '7 days'),
+  (3, 3, CURRENT_TIMESTAMP - interval '1 day', NULL);
 
 COMMIT;
