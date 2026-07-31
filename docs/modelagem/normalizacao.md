@@ -1,6 +1,6 @@
 # Normalização até a Terceira Forma Normal
 
-Esta análise considera o modelo relacional 2.0 e as regras de negócio registradas no contrato. Uma seta `X → Y` indica que X determina funcionalmente Y.
+Esta análise considera o modelo relacional 3.0 e as regras de negócio registradas no contrato. Uma seta `X → Y` indica que X determina funcionalmente Y.
 
 ## Dependências funcionais
 
@@ -14,9 +14,11 @@ Esta análise considera o modelo relacional 2.0 e as regras de negócio registra
 | ATUACAO_PRECEPTOR | `id_atuacao → titulacao` |
 | UNIDADE | `id_unidade → nome, tipo, capacidade_leitos` |
 | ATENDIMENTO | `id_atendimento → data_hora, duracao_minutos, id_paciente, id_atuacao_residente, id_atuacao_preceptor, id_unidade` |
-| PROCEDIMENTO | `id_procedimento → codigo, nome, tempo_medio_minutos, nivel_risco`; `codigo → id_procedimento, nome, tempo_medio_minutos, nivel_risco` |
-| PROCEDIMENTO_REALIZADO | `(id_atendimento, id_procedimento) → quantidade, tempo_real_minutos, observacao, faturado` |
+| PROCEDIMENTO | `id_procedimento → codigo, nome, tempo_medio_minutos, nivel_risco, media_tempo_procedimento`; `codigo →` os mesmos atributos |
+| PROCEDIMENTO_REALIZADO | `(id_atendimento, id_procedimento) → quantidade, tempo_real_minutos, data_hora_inicio, observacao, faturado` |
 | ESCALA | `id_escala → id_unidade, turno, data_plantao, id_atuacao_residente, id_atuacao_preceptor`; `(id_unidade, data_plantao, turno, id_atuacao_residente) → id_escala, id_atuacao_preceptor` |
+| INTERNACAO | `id_internacao → id_paciente, id_unidade, data_hora_entrada, data_hora_saida` |
+| AUDITORIA_ATENDIMENTO | `id_auditoria → id_atendimento, operacao, usuario, data_hora, dados_antigos, dados_novos` |
 
 CPF, CRM, código do procedimento e a combinação única da escala são chaves candidatas conforme as restrições aprovadas. Como `data_plantao → dia_semana`, o dia da semana é derivado em consultas e não é armazenado em ESCALA; isso elimina a dependência transitiva que surgiria ao manter os dois valores.
 
@@ -42,7 +44,10 @@ Os dados descritivos das entidades referenciadas não são repetidos nas relaç�
 
 As especializações também evitam dependências transitivas: atributos gerais ficam em PESSOA ou PROFISSIONAL; datas do papel ficam em ATUACAO_PROFISSIONAL; `ano_residencia` e `titulacao` ficam somente nos subtipos correspondentes.
 
-Não há dependência funcional não trivial declarada entre atributos não-chave. Em cada relação, todo determinante é chave candidata. Assim, as 11 relações estão em 3FN e, sob as dependências registradas, também atendem à BCNF.
+`media_tempo_procedimento` é uma redundância derivada e controlada exigida pela
+Etapa 2. Ela é mantida exclusivamente por trigger e não deve ser editada pela
+aplicação. As demais dependências mantêm as relações em 3FN; a tabela de
+auditoria é um registro histórico imutável.
 
 ## Justificativa por relação
 
@@ -59,6 +64,8 @@ Não há dependência funcional não trivial declarada entre atributos não-chav
 | PROCEDIMENTO | Atributos escalares; PK definida | Chave simples | Dados dependem somente de id_procedimento ou codigo |
 | PROCEDIMENTO_REALIZADO | Uma tupla por par atendimento–procedimento | Todos os atributos não-chave dependem da chave completa | Não replica dados de atendimento ou procedimento |
 | ESCALA | Uma tupla por alocação de plantão | Chave primária simples e chave candidata composta completas | Supervisor e demais dados são determinados pelas chaves candidatas |
+| INTERNACAO | Uma tupla por período de internação | Chave simples | Paciente, unidade e período dependem somente de id_internacao |
+| AUDITORIA_ATENDIMENTO | Uma tupla por evento auditado | Chave simples | Metadados e imagens dependem somente de id_auditoria |
 
 ## Integridade sem alteração da normalização
 

@@ -1,4 +1,4 @@
-# Modelo relacional — versão 2.0
+# Modelo relacional — versão 3.0
 
 O modelo abaixo traduz o DER ampliado para relações. Tipos físicos e sintaxe SQL pertencem à etapa de implementação.
 
@@ -12,9 +12,11 @@ O modelo abaixo traduz o DER ampliado para relações. Tipos físicos e sintaxe 
 | ATUACAO_PRECEPTOR | id_atuacao, titulacao | id_atuacao | id_atuacao → ATUACAO_PROFISSIONAL(id_atuacao) | PK compartilhada |
 | UNIDADE | id_unidade, nome, tipo, capacidade_leitos | id_unidade | — | tipo no domínio aprovado; capacidade_leitos não negativa |
 | ATENDIMENTO | id_atendimento, data_hora, duracao_minutos, id_paciente, id_atuacao_residente, id_atuacao_preceptor, id_unidade | id_atendimento | id_paciente → PACIENTE(id_pessoa); id_atuacao_residente → ATUACAO_RESIDENTE(id_atuacao); id_atuacao_preceptor → ATUACAO_PRECEPTOR(id_atuacao); id_unidade → UNIDADE(id_unidade) | duração positiva; FKs obrigatórias; atuações vigentes em data_hora |
-| PROCEDIMENTO | id_procedimento, codigo, nome, tempo_medio_minutos, nivel_risco | id_procedimento | — | codigo único; tempo médio positivo; risco em BAIXO, MEDIO ou ALTO |
-| PROCEDIMENTO_REALIZADO | id_atendimento, id_procedimento, quantidade, tempo_real_minutos, observacao, faturado | (id_atendimento, id_procedimento) | id_atendimento → ATENDIMENTO(id_atendimento); id_procedimento → PROCEDIMENTO(id_procedimento) | quantidade e tempo real positivos; faturado padrão falso |
+| PROCEDIMENTO | id_procedimento, codigo, nome, tempo_medio_minutos, nivel_risco, media_tempo_procedimento | id_procedimento | — | codigo único; tempos positivos; risco em BAIXO, MEDIO ou ALTO; média derivada |
+| PROCEDIMENTO_REALIZADO | id_atendimento, id_procedimento, quantidade, tempo_real_minutos, data_hora_inicio, observacao, faturado | (id_atendimento, id_procedimento) | id_atendimento → ATENDIMENTO(id_atendimento); id_procedimento → PROCEDIMENTO(id_procedimento) | quantidade e tempo real positivos; início não anterior ao atendimento; faturado padrão falso |
 | ESCALA | id_escala, id_unidade, turno, data_plantao, id_atuacao_residente, id_atuacao_preceptor | id_escala | id_unidade → UNIDADE(id_unidade); id_atuacao_residente → ATUACAO_RESIDENTE(id_atuacao); id_atuacao_preceptor → ATUACAO_PRECEPTOR(id_atuacao) | UNIQUE(id_unidade, data_plantao, turno, id_atuacao_residente); domínio de turno; atuações vigentes na data |
+| INTERNACAO | id_internacao, id_paciente, id_unidade, data_hora_entrada, data_hora_saida | id_internacao | id_paciente → PACIENTE(id_pessoa); id_unidade → UNIDADE(id_unidade) | saída nula ou não anterior à entrada; uma internação ativa por paciente |
+| AUDITORIA_ATENDIMENTO | id_auditoria, id_atendimento, operacao, usuario, data_hora, dados_antigos, dados_novos | id_auditoria | — | operação em INSERT, UPDATE ou DELETE; imagens JSONB |
 
 ## Mapeamento das especializações
 
@@ -29,6 +31,8 @@ ATUACAO_RESIDENTE e ATUACAO_PRECEPTOR usam a chave de ATUACAO_PROFISSIONAL como 
 - OCORRE_EM é materializado por `id_unidade` em ATENDIMENTO.
 - PROCEDIMENTO_REALIZADO materializa o relacionamento N:N entre ATENDIMENTO e PROCEDIMENTO e mantém seus atributos próprios.
 - ACONTECE_EM, ESCALADO_EM e SUPERVISIONA_PLANTAO são materializados pelas três FKs de ESCALA.
+- INTERNACAO mantém o histórico N:1 de pacientes e unidades.
+- AUDITORIA_ATENDIMENTO mantém referência lógica, sem FK, para sobreviver a DELETE.
 - `dia_semana` é calculado a partir de `data_plantao` em consultas e não é armazenado na relação normalizada.
 
 ## Regras que excedem constraints simples

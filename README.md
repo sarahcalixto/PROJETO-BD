@@ -9,9 +9,11 @@ Projeto da disciplina de Banco de Dados para modelar e implementar, em PostgreSQ
 - `uv` para ambiente e dependências;
 - `psycopg[binary]` para acesso ao banco;
 - `python-dotenv` para configuração local;
+- SQLAlchemy 2.x para o mapeamento objeto-relacional da Etapa 2;
 - `pytest` para testes.
 
-O projeto não utiliza ORM, SQLAlchemy ou Alembic nesta etapa.
+O acesso SQL puro da Etapa 1 permanece versionado. A Etapa 2 adiciona uma
+camada SQLAlchemy sem remover os scripts originais.
 
 ## Instalação
 
@@ -72,7 +74,11 @@ sudo -iu postgres psql \
 uv run pytest
 ```
 
-`test_crud_consultas.py` e `test_consultas_analiticas.py` são testes de integração: recriam o schema a partir de `sql/01_schema.sql`, carregam `sql/02_dados_teste.sql` e executam as funções/consultas de `sql/03_crud_consultas.sql` e `sql/04_consultas_analiticas.sql` contra o banco `projeto_hospital_teste`. Eles são pulados automaticamente (`SKIPPED`) se esse banco não estiver acessível. As fixtures usadas por esses testes ficam em `tests/config.py`, registrado como plugin do pytest via `addopts = "-p tests.config"` em `pyproject.toml` (em vez de um `conftest.py`).
+Os testes de integração recriam o schema a partir de `sql/01_schema.sql`,
+carregam `sql/02_dados_teste.sql` e usam o banco `projeto_hospital_teste`.
+Eles são pulados automaticamente (`SKIPPED`) se esse banco não estiver
+acessível. As fixtures compartilhadas de psycopg e SQLAlchemy ficam em
+`tests/config.py`, registrado como plugin do pytest via `pyproject.toml`.
 
 ## Estrutura
 
@@ -87,7 +93,14 @@ uv run pytest
 │   │   ├── der_hospital.pdf
 │   │   ├── modelo_relacional.md
 │   │   └── normalizacao.md
-│   └── requisitos/requisitos_etapa_1.md
+│   ├── divisao_etapa_2.md
+│   └── requisitos/
+│       ├── requisitos_etapa_1.md
+│       └── requisitos_etapa_2.md
+├── frontend/
+│   ├── app.py
+│   ├── app_pages/
+│   └── assets/
 ├── scripts/check_environment.py
 ├── sql/
 │   ├── 01_schema.sql
@@ -95,9 +108,11 @@ uv run pytest
 │   ├── 03_crud_consultas.sql
 │   └── 04_consultas_analiticas.sql
 ├── src/projeto_hospital/
-│   ├── __init__.py
-│   ├── config.py
-│   └── database.py
+│   ├── orm/
+│   │   ├── base.py
+│   │   ├── models.py
+│   │   └── session.py
+│   └── ui/
 ├── tests/
 │   ├── __init__.py
 │   ├── config.py
@@ -113,10 +128,10 @@ uv run pytest
 
 ## Divisão da equipe
 
-- Sarah: organização, convenções, contrato do esquema, DER, modelo relacional e normalização.
-- Ruan: criação do esquema (`01_schema.sql`) e dados de teste (`02_dados_teste.sql`).
-- Samuel: CRUD e consultas básicas (`03_crud_consultas.sql`).
-- Carol: consultas analíticas (`04_consultas_analiticas.sql`).
+A divisão detalhada da Etapa 2 está em
+`docs/divisao_etapa_2.md`. Sarah entrega primeiro a base compartilhada; depois
+Ruan assume procedures e concorrência, Carol assume triggers e views, e Samuel
+assume operações e consultas ORM. Sarah realiza a integração e o front final.
 
 ## DER
 
@@ -125,7 +140,10 @@ O diagrama foi criado no diagrams.net e está versionado como `docs/modelagem/de
 ## Branches e commits
 
 - `main`: versão estável e integrada.
-- `feature/modelagem`: modelagem e documentação sob responsabilidade da Sarah.
+- `feature/etapa2-base`: infraestrutura compartilhada sob responsabilidade da Sarah.
+- `feature/etapa2-procedures-concorrencia`: trabalho do Ruan.
+- `feature/etapa2-triggers-views`: trabalho da Carol.
+- `feature/etapa2-orm-operacoes`: trabalho do Samuel.
 - Demais trabalhos devem usar branches de funcionalidade próprias e abrir integração somente após revisão.
 
 Os commits devem seguir Conventional Commits, no formato `tipo(escopo opcional): descrição`, e conter uma única mudança lógica. Exemplos: `docs: add relational model template` e `test: add initial configuration test`.

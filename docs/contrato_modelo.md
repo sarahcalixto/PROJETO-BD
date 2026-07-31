@@ -1,8 +1,8 @@
 # Contrato do modelo
 
-**Versão:** 2.0
+**Versão:** 3.0
 
-**Estado:** modelo ampliado aprovado para a Etapa 1 e alinhado ao DER.
+**Estado:** modelo ampliado para a base da Etapa 2.
 
 ## Convenções
 
@@ -99,6 +99,7 @@ As atuações referenciadas devem estar vigentes na data e hora do atendimento.
 | nome | — | — |
 | tempo_medio_minutos | — | Valor positivo |
 | nivel_risco | — | Domínio: BAIXO, MEDIO ou ALTO |
+| media_tempo_procedimento | — | Média derivada dos tempos reais; nula sem ocorrências |
 
 ### PROCEDIMENTO_REALIZADO
 
@@ -108,6 +109,7 @@ As atuações referenciadas devem estar vigentes na data e hora do atendimento.
 | id_procedimento | PK, FK | PROCEDIMENTO(id_procedimento) |
 | quantidade | — | Valor positivo |
 | tempo_real_minutos | — | Valor positivo |
+| data_hora_inicio | — | Início efetivo, não anterior ao atendimento |
 | observacao | — | — |
 | faturado | — | Booleano, padrão falso |
 
@@ -128,6 +130,31 @@ Restrição aprovada: `UQ (id_unidade, data_plantao, turno, id_atuacao_residente
 
 `dia_semana` é informação derivada de `data_plantao` e pode ser exibida em consultas, mas não integra a relação armazenada para evitar redundância.
 
+### INTERNACAO
+
+| Atributo | Chave | Referência/regra |
+|---|---|---|
+| id_internacao | PK | — |
+| id_paciente | FK | PACIENTE(id_pessoa) |
+| id_unidade | FK | UNIDADE(id_unidade) |
+| data_hora_entrada | — | Obrigatória |
+| data_hora_saida | — | Nula enquanto ativa; não anterior à entrada |
+
+Cada paciente pode possuir histórico de internações, mas no máximo uma
+internação ativa.
+
+### AUDITORIA_ATENDIMENTO
+
+| Atributo | Chave | Regra |
+|---|---|---|
+| id_auditoria | PK | — |
+| id_atendimento | — | Identificador preservado, sem FK |
+| operacao | — | INSERT, UPDATE ou DELETE |
+| usuario | — | Usuário PostgreSQL responsável |
+| data_hora | — | Instante da operação |
+| dados_antigos | — | Imagem JSONB anterior, quando aplicável |
+| dados_novos | — | Imagem JSONB nova, quando aplicável |
+
 ## Especializações e cardinalidades
 
 - PESSOA possui especialização parcial e sobreposta: nem toda pessoa precisa ter subtipo, e uma pessoa pode ser paciente e profissional.
@@ -135,7 +162,11 @@ Restrição aprovada: `UQ (id_unidade, data_plantao, turno, id_atuacao_residente
 - Um atendimento possui exatamente um paciente, uma atuação residente, uma atuação preceptora e uma unidade; cada participante pode aparecer em vários atendimentos.
 - Um atendimento possui um ou mais procedimentos realizados; um tipo de procedimento pode não ter sido realizado ou aparecer em vários atendimentos.
 - Uma escala possui exatamente uma unidade, uma atuação residente e uma atuação preceptora; cada um deles pode participar de várias escalas.
+- Uma internação pertence a exatamente um paciente e uma unidade.
+- Uma linha de auditoria referencia logicamente um atendimento, mas permanece
+  independente para sobreviver à exclusão do registro original.
 
 ## Limite do contrato
 
-Este documento define o esquema lógico aprovado, mas não implementa SQL. Regras temporais que dependam da comparação entre datas devem ser tratadas pelo responsável pela implementação.
+Este documento define o esquema lógico aprovado. Regras entre relações, médias
+derivadas e auditoria são implementadas pelas procedures e triggers da Etapa 2.
