@@ -7,7 +7,7 @@ from pathlib import Path
 
 import streamlit as st
 
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from projeto_hospital.ui.components import aplicar_estilos, cabecalho_pagina
 from projeto_hospital.ui.data import get_connection

@@ -23,7 +23,7 @@ from projeto_hospital.ui.data import (
     run_query,
 )
 
-PAGES_DIR = Path(__file__).parents[3] / "app_pages"
+PAGES_DIR = Path(__file__).parents[3] / "frontend" / "app_pages"
 
 
 def label_atuacao(row: pd.Series) -> str:
