@@ -4,8 +4,11 @@ from dataclasses import replace
 
 import psycopg
 import pytest
+from sqlalchemy import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from projeto_hospital.config import DatabaseConfig, load_database_config
+from projeto_hospital.orm import create_database_engine, create_session_factory
 
 from .utils import read_sql, split_sql_statements
 
@@ -18,6 +21,33 @@ def conn(_prepared_database: DatabaseConfig) -> Iterator[psycopg.Connection]:
     finally:
         connection.rollback()
         connection.close()
+
+
+@pytest.fixture(scope="session")
+def orm_engine(_prepared_database: DatabaseConfig) -> Iterator[Engine]:
+    """Engine SQLAlchemy conectado ao banco de teste já preparado."""
+    engine = create_database_engine(_prepared_database)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def orm_session_factory(
+    orm_engine: Engine,
+) -> sessionmaker[Session]:
+    return create_session_factory(orm_engine)
+
+
+@pytest.fixture()
+def orm_session(
+    orm_session_factory: sessionmaker[Session],
+) -> Iterator[Session]:
+    session = orm_session_factory()
+    try:
+        yield session
+    finally:
+        session.rollback()
+        session.close()
 
 
 @pytest.fixture(scope="session")
