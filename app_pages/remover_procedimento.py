@@ -1,0 +1,4 @@
+from projeto_hospital.ui.components import executar_pagina
+from projeto_hospital.ui.pages import pagina_remover_procedimento
+
+executar_pagina(pagina_remover_procedimento)

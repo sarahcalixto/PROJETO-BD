@@ -6,7 +6,7 @@ def render_visao_geral_preenchida() -> None:
 
     import pandas as pd
 
-    import app
+    from projeto_hospital.ui import pages as app
 
     def consulta(sql: str, params: dict | tuple | None = None) -> pd.DataFrame:
         del params
@@ -40,7 +40,7 @@ def render_visao_geral_preenchida() -> None:
 def render_visao_geral_vazia() -> None:
     import pandas as pd
 
-    import app
+    from projeto_hospital.ui import pages as app
 
     def consulta(sql: str, params: dict | tuple | None = None) -> pd.DataFrame:
         del params
@@ -64,7 +64,7 @@ def render_visao_geral_vazia() -> None:
 def render_navegacao() -> None:
     import pandas as pd
 
-    import app
+    from projeto_hospital.ui import pages as app
 
     def consulta(sql: str, params: dict | tuple | None = None) -> pd.DataFrame:
         del params
@@ -91,7 +91,7 @@ def render_historico_paciente() -> None:
 
     import pandas as pd
 
-    import app
+    from projeto_hospital.ui import pages as app
 
     app.listar_pacientes = lambda: pd.DataFrame(
         [
@@ -129,7 +129,7 @@ def render_historico_paciente() -> None:
 def render_erro_consulta() -> None:
     import psycopg
 
-    import app
+    from projeto_hospital.ui import pages as app
 
     def pagina_com_erro() -> None:
         raise psycopg.OperationalError("conexão interrompida")
@@ -142,7 +142,7 @@ def render_remocao_nao_faturada() -> None:
 
     import pandas as pd
 
-    import app
+    from projeto_hospital.ui import pages as app
 
     app.listar_atendimentos_ids = lambda: pd.DataFrame(
         [
@@ -162,7 +162,7 @@ def render_remocao_nao_faturada() -> None:
 def render_consultas_analiticas() -> None:
     import pandas as pd
 
-    import app
+    from projeto_hospital.ui import pages as app
 
     def consulta(sql: str, params: dict | tuple | None = None) -> pd.DataFrame:
         del params
