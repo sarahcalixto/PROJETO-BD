@@ -24,15 +24,15 @@
 --   ATENDIMENTO.
 --
 -- Exemplo:
---   SELECT inserir_atendimento_validado(
---       1,
---       TIMESTAMP '2026-07-13 09:00:00',
---       30,
---       1,
---       1,
---       2,
---       1
---   );
+-- SELECT inserir_atendimento_validado(
+--    101,
+--    TIMESTAMP '2026-07-13 09:00:00',
+--    30::smallint,
+--    9999,
+--    1,
+--    6,
+--    1
+--);
 
 CREATE OR REPLACE FUNCTION inserir_atendimento_validado(
     p_id_atendimento atendimento.id%TYPE,
