@@ -1,85 +1,155 @@
-import pytest
+"""Testes de integração dos três triggers da Etapa 2."""
+
+from datetime import date, datetime
+from decimal import Decimal
+
 import psycopg
+import pytest
 
-def test_trg_check_sobreposicao_escala_bloqueia_conflito(conn):
-    residente_id = conn.execute("SELECT id FROM atuacao_residente LIMIT 1").fetchone()[0]
-    preceptor_id = conn.execute("SELECT id FROM atuacao_preceptor LIMIT 1").fetchone()[0]
-    unidade_1 = conn.execute("SELECT id FROM unidade LIMIT 1").fetchone()[0]
-    unidade_2 = conn.execute("SELECT id FROM unidade OFFSET 1 LIMIT 1").fetchone()[0]
 
-    # 1. Inserção válida
-    conn.execute(f"""
-        INSERT INTO escala (id_unidade, data_plantao, turno, id_atuacao_residente, id_atuacao_preceptor)
-        VALUES ({unidade_1}, '2026-10-10', 'manha', {residente_id}, {preceptor_id})
-    """)
-    
-    # 2. Inserção inválida
-    # Usamos psycopg.Error porque triggers geralmente levantam RaiseException, não CheckViolation
-    with pytest.raises(psycopg.Error):
-        conn.execute(f"""
-            INSERT INTO escala (id_unidade, data_plantao, turno, id_atuacao_residente, id_atuacao_preceptor)
-            VALUES ({unidade_2}, '2026-10-10', 'manha', {residente_id}, {preceptor_id})
-        """)
+def _ids(conn: psycopg.Connection) -> tuple[int, int, int, int, int]:
+    residente = conn.execute("SELECT id FROM atuacao_residente ORDER BY id LIMIT 1").fetchone()[0]
+    preceptor = conn.execute("SELECT id FROM atuacao_preceptor ORDER BY id LIMIT 1").fetchone()[0]
+    unidades = conn.execute("SELECT id FROM unidade ORDER BY id LIMIT 2").fetchall()
+    paciente = conn.execute("SELECT id FROM paciente ORDER BY id LIMIT 1").fetchone()[0]
+    return residente, preceptor, unidades[0][0], unidades[1][0], paciente
 
-def test_trg_audita_atendimento_registra_operacoes(conn):
-    """Garante que INSERT, UPDATE e DELETE gerem rastros na tabela de auditoria."""
-    
-    # Busca IDs dinâmicos para evitar ForeignKeyViolation
-    paciente_id = conn.execute("SELECT id FROM paciente LIMIT 1").fetchone()[0]
-    residente_id = conn.execute("SELECT id FROM atuacao_residente LIMIT 1").fetchone()[0]
-    preceptor_id = conn.execute("SELECT id FROM atuacao_preceptor LIMIT 1").fetchone()[0]
-    unidade_id = conn.execute("SELECT id FROM unidade LIMIT 1").fetchone()[0]
 
-    # 1. Testa o INSERT (usamos o ID 9999 para garantir que não colida com os dados de teste)
-    conn.execute(f"""
-        INSERT INTO atendimento (id, data_hora, duracao_minutos, id_paciente, id_atuacao_residente, id_atuacao_preceptor, id_unidade) 
-        VALUES (9999, '2026-10-10 10:00:00', 30, {paciente_id}, {residente_id}, {preceptor_id}, {unidade_id})
-    """)
-    
-    # 2. Testa o UPDATE
-    conn.execute("UPDATE atendimento SET duracao_minutos = 45 WHERE id = 9999")
-    
-    # 3. Testa o DELETE
-    conn.execute("DELETE FROM atendimento WHERE id = 9999")
-    
-   # 4. Verifica a Auditoria
-    logs = conn.execute("""
-        SELECT operacao, dados_antigos, dados_novos 
-        FROM auditoria_atendimento 
-        WHERE id_atendimento = 9999 
-        ORDER BY data_hora ASC
-    """).fetchall()
-    
-    # Validações estruturais para garantir que o trigger fez as 3 fotos do registro
-    assert len(logs) == 3
-    
-    # Valida o estado do INSERT
-    assert logs[0][0] == 'INSERT'
-    
-    # Valida o estado do UPDATE (se capturou a alteração para 45 minutos)
-    assert logs[1][0] == 'UPDATE'
-    assert logs[1][2]['duracao_minutos'] == 45
-    
-    # Valida o estado do DELETE
-    assert logs[2][0] == 'DELETE'
+@pytest.mark.parametrize("operacao", ["INSERT", "UPDATE"])
+def test_sobreposicao_bloqueia_insert_e_update(
+    conn: psycopg.Connection,
+    operacao: str,
+) -> None:
+    residente, preceptor, unidade_1, unidade_2, _ = _ids(conn)
+    data_plantao = date(2029, 10, 10)
+    conn.execute(
+        """
+        INSERT INTO escala (
+            id_unidade, data_plantao, turno,
+            id_atuacao_residente, id_atuacao_preceptor
+        ) VALUES (%s, %s, 'manha', %s, %s)
+        """,
+        (unidade_1, data_plantao, residente, preceptor),
+    )
 
-def test_trg_atualiza_media_procedimentos_calcula_corretamente(conn):
-    # Pegamos um procedimento válido
-    proc_id = conn.execute("SELECT id FROM procedimento LIMIT 1").fetchone()[0]
-    
-    # Para evitar UniqueViolation, criamos um NOVO atendimento (ID 999) dinamicamente
-    paciente_id = conn.execute("SELECT id FROM paciente LIMIT 1").fetchone()[0]
-    residente_id = conn.execute("SELECT id FROM atuacao_residente LIMIT 1").fetchone()[0]
-    preceptor_id = conn.execute("SELECT id FROM atuacao_preceptor LIMIT 1").fetchone()[0]
-    unidade_id = conn.execute("SELECT id FROM unidade LIMIT 1").fetchone()[0]
-    
-    conn.execute(f"""
-        INSERT INTO atendimento (id, data_hora, duracao_minutos, id_paciente, id_atuacao_residente, id_atuacao_preceptor, id_unidade) 
-        VALUES (999, '2026-11-10 10:00:00', 30, {paciente_id}, {residente_id}, {preceptor_id}, {unidade_id})
-    """)
+    with pytest.raises(psycopg.errors.CheckViolation):
+        if operacao == "INSERT":
+            conn.execute(
+                """
+                INSERT INTO escala (
+                    id_unidade, data_plantao, turno,
+                    id_atuacao_residente, id_atuacao_preceptor
+                ) VALUES (%s, %s, 'manha', %s, %s)
+                """,
+                (unidade_2, data_plantao, residente, preceptor),
+            )
+        else:
+            id_escala = conn.execute(
+                """
+                INSERT INTO escala (
+                    id_unidade, data_plantao, turno,
+                    id_atuacao_residente, id_atuacao_preceptor
+                ) VALUES (%s, %s, 'tarde', %s, %s)
+                RETURNING id
+                """,
+                (unidade_2, data_plantao, residente, preceptor),
+            ).fetchone()[0]
+            conn.execute(
+                "UPDATE escala SET turno = 'manha' WHERE id = %s",
+                (id_escala,),
+            )
 
-    # Agora inserimos o procedimento nesse novo atendimento
-    conn.execute(f"INSERT INTO procedimento_realizado (id_atendimento, id_procedimento, quantidade, tempo_real_minutos, data_hora_inicio) VALUES (999, {proc_id}, 1, 10, NOW())")
-    
-    media = conn.execute(f"SELECT media_tempo_procedimento FROM procedimento WHERE id = {proc_id}").fetchone()[0]
-    assert media is not None
+
+def test_auditoria_registra_json_exato_das_tres_operacoes(
+    conn: psycopg.Connection,
+) -> None:
+    residente, preceptor, unidade, _, paciente = _ids(conn)
+    id_atendimento = 9999
+    conn.execute(
+        """
+        INSERT INTO atendimento (
+            id, data_hora, duracao_minutos, id_paciente,
+            id_atuacao_residente, id_atuacao_preceptor, id_unidade
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            id_atendimento,
+            datetime(2029, 10, 10, 10),
+            30,
+            paciente,
+            residente,
+            preceptor,
+            unidade,
+        ),
+    )
+    conn.execute(
+        "UPDATE atendimento SET duracao_minutos = %s WHERE id = %s",
+        (45, id_atendimento),
+    )
+    conn.execute("DELETE FROM atendimento WHERE id = %s", (id_atendimento,))
+
+    logs = conn.execute(
+        """
+        SELECT operacao, dados_antigos, dados_novos
+        FROM auditoria_atendimento
+        WHERE id_atendimento = %s
+        ORDER BY id_auditoria
+        """,
+        (id_atendimento,),
+    ).fetchall()
+
+    assert [log[0] for log in logs] == ["INSERT", "UPDATE", "DELETE"]
+    assert logs[0][1] is None
+    assert logs[0][2]["duracao_minutos"] == 30
+    assert logs[1][1]["duracao_minutos"] == 30
+    assert logs[1][2]["duracao_minutos"] == 45
+    assert logs[2][1]["duracao_minutos"] == 45
+    assert logs[2][2] is None
+
+
+def test_media_do_procedimento_e_calculada_exatamente(
+    conn: psycopg.Connection,
+) -> None:
+    residente, preceptor, unidade, _, paciente = _ids(conn)
+    procedimento = conn.execute(
+        "SELECT id FROM procedimento ORDER BY id LIMIT 1"
+    ).fetchone()[0]
+    id_atendimento = conn.execute(
+        """
+        INSERT INTO atendimento (
+            data_hora, duracao_minutos, id_paciente,
+            id_atuacao_residente, id_atuacao_preceptor, id_unidade
+        ) VALUES (%s, 30, %s, %s, %s, %s)
+        RETURNING id
+        """,
+        (datetime(2029, 11, 10, 10), paciente, residente, preceptor, unidade),
+    ).fetchone()[0]
+    tempos_anteriores = [
+        row[0]
+        for row in conn.execute(
+            """
+            SELECT tempo_real_minutos
+            FROM procedimento_realizado
+            WHERE id_procedimento = %s
+            """,
+            (procedimento,),
+        ).fetchall()
+    ]
+    conn.execute(
+        """
+        INSERT INTO procedimento_realizado (
+            id_atendimento, id_procedimento, quantidade,
+            tempo_real_minutos, data_hora_inicio
+        ) VALUES (%s, %s, 1, 10, %s)
+        """,
+        (id_atendimento, procedimento, datetime(2029, 11, 10, 10, 5)),
+    )
+    media = conn.execute(
+        "SELECT media_tempo_procedimento FROM procedimento WHERE id = %s",
+        (procedimento,),
+    ).fetchone()[0]
+    esperada = (
+        Decimal(sum(tempos_anteriores) + 10)
+        / Decimal(len(tempos_anteriores) + 1)
+    ).quantize(Decimal("0.01"))
+    assert media == esperada

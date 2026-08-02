@@ -1,112 +1,146 @@
-import pytest
+"""Testes determinísticos das três views da Etapa 2."""
 
-def test_vw_pacientes_internados_apenas_ativos(conn):
-    """Garante que a view exibe apenas pacientes com internação ativa (data_hora_saida IS NULL)."""
-    
-    # Busca 2 pacientes existentes
-    pacientes = conn.execute("SELECT p.id, pes.nome FROM paciente p JOIN pessoa pes ON p.id = pes.id LIMIT 2").fetchall()
-    paciente_1_id, paciente_1_nome = pacientes[0]
-    paciente_2_id, paciente_2_nome = pacientes[1]
-    
-    unidade_id = conn.execute("SELECT id FROM unidade LIMIT 1").fetchone()[0]
+from datetime import date, datetime
+from decimal import Decimal
 
-    # Internação 1: paciente 1 já recebeu alta (data_hora_saida preenchida)
-    conn.execute(f"""
-        INSERT INTO internacao (id_paciente, id_unidade, data_hora_entrada, data_hora_saida)
-        VALUES ({paciente_1_id}, {unidade_id}, '2026-01-01 08:00:00', '2026-01-05 10:00:00')
-    """)
-
-    # Internação 2: paciente 2 está atualmente internado (data_hora_saida é NULL)
-    conn.execute(f"""
-        INSERT INTO internacao (id_paciente, id_unidade, data_hora_entrada, data_hora_saida)
-        VALUES ({paciente_2_id}, {unidade_id}, '2026-02-01 08:00:00', NULL)
-    """)
-
-    # Busca os pacientes retornados pela View
-    resultados = conn.execute("SELECT paciente FROM vw_pacientes_internados").fetchall()
-    nomes_internados = [r[0] for r in resultados]
-
-    # O paciente 2 (ativo) deve constar na listagem
-    assert paciente_2_nome in nomes_internados
-    
-    # O registro da internação encerrada do paciente 1 não pode aparecer
-    internacao_pac1 = conn.execute(f"""
-        SELECT COUNT(*) FROM vw_pacientes_internados 
-        WHERE paciente = '{paciente_1_nome}' AND data_internacao = '2026-01-01 08:00:00'
-    """).fetchone()[0]
-    assert internacao_pac1 == 0
+import psycopg
 
 
-def test_vw_residentes_sem_supervisor_ignora_doutores(conn):
-    """Verifica se apenas residentes supervisionados por Não-Doutores aparecem na view."""
-    
-    resultados = conn.execute("SELECT residente, preceptor_alocado, titulacao FROM vw_residentes_sem_supervisor").fetchall()
-    
-    # NENHUM preceptor retornado pela view pode ter a titulação 'doutor'
-    for _, _, titulacao in resultados:
-        assert titulacao.lower() != 'doutor'
+def _ids(conn: psycopg.Connection) -> tuple[int, int, int, int]:
+    paciente = conn.execute("SELECT id FROM paciente ORDER BY id LIMIT 1").fetchone()[0]
+    residente = conn.execute("SELECT id FROM atuacao_residente ORDER BY id LIMIT 1").fetchone()[0]
+    preceptor = conn.execute("SELECT id FROM atuacao_preceptor ORDER BY id LIMIT 1").fetchone()[0]
+    unidade = conn.execute("SELECT id FROM unidade ORDER BY id LIMIT 1").fetchone()[0]
+    return paciente, residente, preceptor, unidade
 
 
-def test_vw_estatisticas_atendimentos_mensal_agregacao(conn):
-    """Testa se a agregação por mês e unidade calcula corretamente total de atendimentos e média de tempo."""
-    
-    paciente_id = conn.execute("SELECT id FROM paciente LIMIT 1").fetchone()[0]
-    residente_id = conn.execute("SELECT id FROM atuacao_residente LIMIT 1").fetchone()[0]
-    preceptor_id = conn.execute("SELECT id FROM atuacao_preceptor LIMIT 1").fetchone()[0]
-    
-    unidade_data = conn.execute("SELECT id, nome FROM unidade LIMIT 1").fetchone()
-    unidade_id, unidade_nome = unidade_data[0], unidade_data[1]
-    
-    proc_id = conn.execute("SELECT id FROM procedimento LIMIT 1").fetchone()[0]
-
-    # Inserimos 2 atendimentos para Novembro/2026 nesta unidade
-    # Atendimento 1: 20 min | Atendimento 2: 40 min -> Total: 2 | Média: 30.00 min
-    conn.execute(f"""
-        INSERT INTO atendimento (id, data_hora, duracao_minutos, id_paciente, id_atuacao_residente, id_atuacao_preceptor, id_unidade)
-        VALUES (7701, '2026-11-05 10:00:00', 20, {paciente_id}, {residente_id}, {preceptor_id}, {unidade_id})
-    """)
-    conn.execute(f"""
-        INSERT INTO atendimento (id, data_hora, duracao_minutos, id_paciente, id_atuacao_residente, id_atuacao_preceptor, id_unidade)
-        VALUES (7702, '2026-11-10 14:00:00', 40, {paciente_id}, {residente_id}, {preceptor_id}, {unidade_id})
-    """)
-
-    # Associa procedimento realizado aos dois atendimentos
-    conn.execute(f"INSERT INTO procedimento_realizado (id_atendimento, id_procedimento, quantidade, tempo_real_minutos, data_hora_inicio) VALUES (7701, {proc_id}, 1, 20, '2026-11-05 10:00:00')")
-    conn.execute(f"INSERT INTO procedimento_realizado (id_atendimento, id_procedimento, quantidade, tempo_real_minutos, data_hora_inicio) VALUES (7702, {proc_id}, 1, 40, '2026-11-10 14:00:00')")
-
-    # Consulta a View para o mês 11/2026
-    res = conn.execute(f"""
-        SELECT total_atendimentos, media_duracao_minutos, procedimento_mais_comum 
-        FROM vw_estatisticas_atendimentos_mensal 
-        WHERE unidade = '{unidade_nome}' AND ano = 2026 AND mes = 11
-    """).fetchone()
-
-    assert res is not None
-    total_atendimentos, media_duracao, procedimento_mais_comum = res
-
-    assert total_atendimentos == 2
-    assert float(media_duracao) == 30.00
-    assert procedimento_mais_comum is not None
+def test_pacientes_internados_considera_somente_internacao_mais_recente(
+    conn: psycopg.Connection,
+) -> None:
+    paciente, _, _, unidade = _ids(conn)
+    conn.execute("DELETE FROM internacao WHERE id_paciente = %s", (paciente,))
+    conn.execute(
+        """
+        INSERT INTO internacao (
+            id_paciente, id_unidade, data_hora_entrada, data_hora_saida
+        ) VALUES
+            (%s, %s, %s, NULL),
+            (%s, %s, %s, %s)
+        """,
+        (
+            paciente,
+            unidade,
+            datetime(2029, 1, 1, 8),
+            paciente,
+            unidade,
+            datetime(2029, 2, 1, 8),
+            datetime(2029, 2, 2, 8),
+        ),
+    )
+    nome = conn.execute("SELECT nome FROM pessoa WHERE id = %s", (paciente,)).fetchone()[0]
+    assert conn.execute(
+        "SELECT COUNT(*) FROM vw_pacientes_internados WHERE paciente = %s",
+        (nome,),
+    ).fetchone()[0] == 0
 
 
-def test_vw_estatisticas_resolve_empate_alfabetico(conn):
-    """Testa o desempate do procedimento mais realizado pela ordem alfabética."""
-    proc_1 = conn.execute("SELECT id FROM procedimento LIMIT 1").fetchone()[0]
-    proc_2 = conn.execute("SELECT id FROM procedimento OFFSET 1 LIMIT 1").fetchone()[0]
-    
-    paciente_id = conn.execute("SELECT id FROM paciente LIMIT 1").fetchone()[0]
-    residente_id = conn.execute("SELECT id FROM atuacao_residente LIMIT 1").fetchone()[0]
-    preceptor_id = conn.execute("SELECT id FROM atuacao_preceptor LIMIT 1").fetchone()[0]
-    
-    unidade_data = conn.execute("SELECT id, nome FROM unidade LIMIT 1").fetchone()
-    unidade_id, unidade_nome = unidade_data[0], unidade_data[1]
-    
-    conn.execute(f"INSERT INTO atendimento (id, data_hora, duracao_minutos, id_paciente, id_atuacao_residente, id_atuacao_preceptor, id_unidade) VALUES (888, '2026-12-01 10:00:00', 30, {paciente_id}, {residente_id}, {preceptor_id}, {unidade_id})")
-    conn.execute(f"INSERT INTO atendimento (id, data_hora, duracao_minutos, id_paciente, id_atuacao_residente, id_atuacao_preceptor, id_unidade) VALUES (889, '2026-12-01 11:00:00', 30, {paciente_id}, {residente_id}, {preceptor_id}, {unidade_id})")
+def test_residentes_sem_supervisor_inclui_nao_doutor_e_doutor_inativo(
+    conn: psycopg.Connection,
+) -> None:
+    _, residente, preceptor_doutor, unidade = _ids(conn)
+    preceptor_nao_doutor = conn.execute(
+        """
+        SELECT id FROM atuacao_preceptor
+        WHERE LOWER(titulacao) <> 'doutor'
+        ORDER BY id LIMIT 1
+        """
+    ).fetchone()[0]
+    conn.execute(
+        "UPDATE atuacao_profissional SET data_fim = %s WHERE id = %s",
+        (date(2029, 12, 31), preceptor_doutor),
+    )
+    conn.execute(
+        """
+        INSERT INTO escala (
+            id_unidade, data_plantao, turno,
+            id_atuacao_residente, id_atuacao_preceptor
+        ) VALUES
+            (%s, %s, 'manha', %s, %s),
+            (%s, %s, 'tarde', %s, %s)
+        """,
+        (
+            unidade,
+            date(2030, 1, 2),
+            residente,
+            preceptor_doutor,
+            unidade,
+            date(2030, 1, 2),
+            residente,
+            preceptor_nao_doutor,
+        ),
+    )
+    linhas = conn.execute(
+        """
+        SELECT id_atuacao_preceptor
+        FROM escala e
+        JOIN vw_residentes_sem_supervisor v
+          ON v.data_plantao = e.data_plantao
+         AND v.turno = e.turno
+         AND v.unidade = (SELECT nome FROM unidade WHERE id = e.id_unidade)
+        WHERE e.data_plantao = %s
+        ORDER BY id_atuacao_preceptor
+        """,
+        (date(2030, 1, 2),),
+    ).fetchall()
+    assert [row[0] for row in linhas] == sorted(
+        [preceptor_doutor, preceptor_nao_doutor]
+    )
 
-    conn.execute(f"INSERT INTO procedimento_realizado (id_atendimento, id_procedimento, quantidade, tempo_real_minutos, data_hora_inicio) VALUES (888, {proc_1}, 1, 10, NOW())")
-    conn.execute(f"INSERT INTO procedimento_realizado (id_atendimento, id_procedimento, quantidade, tempo_real_minutos, data_hora_inicio) VALUES (889, {proc_2}, 1, 10, NOW())")
-    
-    resultado = conn.execute(f"SELECT procedimento_mais_comum FROM vw_estatisticas_atendimentos_mensal WHERE unidade = '{unidade_nome}' AND ano = 2026 AND mes = 12").fetchone()
-    
-    assert resultado is not None
+
+def test_estatisticas_mensais_calcula_valores_e_desempata_por_nome(
+    conn: psycopg.Connection,
+) -> None:
+    paciente, residente, preceptor, unidade = _ids(conn)
+    procedimentos = conn.execute(
+        "SELECT id, nome FROM procedimento ORDER BY nome LIMIT 2"
+    ).fetchall()
+    ids_atendimentos = conn.execute(
+        """
+        INSERT INTO atendimento (
+            data_hora, duracao_minutos, id_paciente,
+            id_atuacao_residente, id_atuacao_preceptor, id_unidade
+        ) VALUES
+            (%s, 20, %s, %s, %s, %s),
+            (%s, 40, %s, %s, %s, %s)
+        RETURNING id
+        """,
+        (
+            datetime(2029, 11, 5, 10), paciente, residente, preceptor, unidade,
+            datetime(2029, 11, 10, 14), paciente, residente, preceptor, unidade,
+        ),
+    ).fetchall()
+    conn.execute(
+        """
+        INSERT INTO procedimento_realizado (
+            id_atendimento, id_procedimento, quantidade,
+            tempo_real_minutos, data_hora_inicio
+        ) VALUES (%s, %s, 1, 20, %s), (%s, %s, 1, 40, %s)
+        """,
+        (
+            ids_atendimentos[0][0], procedimentos[0][0], datetime(2029, 11, 5, 10, 5),
+            ids_atendimentos[1][0], procedimentos[1][0], datetime(2029, 11, 10, 14, 5),
+        ),
+    )
+    unidade_nome = conn.execute(
+        "SELECT nome FROM unidade WHERE id = %s", (unidade,)
+    ).fetchone()[0]
+    resultado = conn.execute(
+        """
+        SELECT total_atendimentos, media_duracao_minutos,
+               procedimento_mais_comum
+        FROM vw_estatisticas_atendimentos_mensal
+        WHERE unidade = %s AND ano = %s AND mes = %s
+        """,
+        (unidade_nome, 2029, 11),
+    ).fetchone()
+    assert resultado == (2, Decimal("30.00"), procedimentos[0][1])
