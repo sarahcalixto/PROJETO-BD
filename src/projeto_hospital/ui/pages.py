@@ -2,11 +2,25 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
+import psycopg
 import streamlit as st
+from sqlalchemy.exc import SQLAlchemyError
+
+from projeto_hospital.services import (
+    atualizar_convenio_paciente,
+    calcular_tempo_medio_por_residente,
+    listar_atendimentos_paciente,
+    listar_procedimentos_atendimento,
+    pacientes_sem_procedimento_alto_risco,
+    plantoes_por_unidade_e_residente,
+    preceptores_com_mais_de_cinco_atendimentos,
+    ranking_residentes_por_atendimentos,
+    remover_procedimento_nao_faturado,
+)
 from projeto_hospital.ui.components import (
     cabecalho_pagina,
     executar_pagina,
@@ -15,12 +29,12 @@ from projeto_hospital.ui.components import (
     mostrar_metricas,
 )
 from projeto_hospital.ui.data import (
+    carregar_visao_geral,
+    dto_dataframe,
+    executar_escrita,
+    executar_leitura,
     listar_atendimentos_ids,
-    listar_atuacoes,
     listar_pacientes,
-    listar_unidades,
-    run_command,
-    run_query,
 )
 
 PAGES_DIR = Path(__file__).parents[3] / "frontend" / "app_pages"
@@ -49,32 +63,7 @@ def pagina_visao_geral() -> None:
     )
 
     with st.spinner("Atualizando indicadores...", show_time=True):
-        indicadores = run_query(
-            """
-            SELECT
-                (SELECT COUNT(*) FROM paciente) AS total_pacientes,
-                (SELECT COUNT(*) FROM atendimento
-                 WHERE data_hora::date = CURRENT_DATE) AS atendimentos_hoje,
-                (SELECT COUNT(*) FROM unidade) AS total_unidades,
-                (SELECT COUNT(*) FROM procedimento_realizado) AS procedimentos_realizados
-            """
-        )
-        recentes = run_query(
-            """
-            SELECT
-                a.id AS id_atendimento,
-                a.data_hora,
-                pes.nome AS paciente,
-                u.nome AS unidade,
-                a.duracao_minutos
-            FROM atendimento a
-            JOIN paciente pac ON pac.id = a.id_paciente
-            JOIN pessoa pes ON pes.id = pac.id
-            JOIN unidade u ON u.id = a.id_unidade
-            ORDER BY a.data_hora DESC
-            LIMIT 8
-            """
-        )
+        indicadores, recentes = carregar_visao_geral()
 
     resumo = indicadores.iloc[0]
     mostrar_metricas(
@@ -128,101 +117,6 @@ def pagina_visao_geral() -> None:
     )
 
 
-def pagina_inserir_atendimento() -> None:
-    cabecalho_pagina(
-        "Atendimentos",
-        "Inserir novo atendimento",
-        "Registre o paciente, a equipe responsável, a unidade e os dados de duração.",
-    )
-
-    with st.spinner("Carregando opções do atendimento...", show_time=True):
-        pacientes = listar_pacientes()
-        residentes = listar_atuacoes("residente")
-        preceptores = listar_atuacoes("preceptor")
-        unidades = listar_unidades()
-
-    if pacientes.empty or residentes.empty or preceptores.empty or unidades.empty:
-        mostrar_estado_vazio(
-            "Pré-requisitos incompletos",
-            "Cadastre pacientes, profissionais com atuação e unidades antes de inserir "
-            "um atendimento.",
-        )
-        return
-
-    proximo = run_query("SELECT COALESCE(MAX(id), 0) + 1 AS proximo FROM atendimento")
-    proximo_id = int(proximo.iloc[0]["proximo"])
-
-    with st.form("form_inserir_atendimento", border=True):
-        st.subheader("Dados do atendimento")
-        with st.container(horizontal=True, gap="medium"):
-            with st.container(width="stretch"):
-                st.caption("Identificação e horário")
-                id_atendimento = st.number_input(
-                    "ID do atendimento", min_value=1, value=proximo_id, step=1
-                )
-                data_atendimento = st.date_input("Data", value=date.today())
-                hora = st.time_input(
-                    "Hora", value=datetime.now().time().replace(microsecond=0)
-                )
-                duracao = st.number_input(
-                    "Duração em minutos", min_value=1, value=30, step=5
-                )
-
-            with st.container(width="stretch"):
-                st.caption("Paciente, equipe e local")
-                paciente = st.selectbox(
-                    "Paciente",
-                    pacientes.itertuples(),
-                    format_func=lambda r: f"{r.nome} (id {r.id})",
-                )
-                residente = st.selectbox(
-                    "Residente (atuação)",
-                    residentes.itertuples(),
-                    format_func=lambda r: label_atuacao(pd.Series(r._asdict())),
-                )
-                preceptor = st.selectbox(
-                    "Preceptor (atuação)",
-                    preceptores.itertuples(),
-                    format_func=lambda r: label_atuacao(pd.Series(r._asdict())),
-                )
-                unidade = st.selectbox(
-                    "Unidade",
-                    unidades.itertuples(),
-                    format_func=lambda r: f"{r.nome} ({r.tipo})",
-                )
-
-        enviado = st.form_submit_button(
-            "Inserir atendimento",
-            type="primary",
-            icon=":material/add_circle:",
-            width="stretch",
-        )
-
-    if enviado:
-        data_hora = datetime.combine(data_atendimento, hora)
-        try:
-            with st.spinner("Registrando atendimento...", show_time=True):
-                resultado = run_command(
-                    "SELECT inserir_atendimento_validado(%s, %s, %s, %s, %s, %s, %s) AS id_criado",
-                    (
-                        int(id_atendimento),
-                        data_hora,
-                        int(duracao),
-                        int(paciente.id),
-                        int(residente.id),
-                        int(preceptor.id),
-                        int(unidade.id),
-                    ),
-                )
-            st.success(
-                f"Atendimento inserido com sucesso — ID "
-                f"{int(resultado.iloc[0]['id_criado'])}.",
-                icon=":material/check_circle:",
-            )
-        except psycopg.Error as exc:
-            mostrar_erro_banco(exc, "Não foi possível inserir o atendimento.")
-
-
 def pagina_atendimentos_paciente() -> None:
     cabecalho_pagina(
         "Consultas",
@@ -247,15 +141,8 @@ def pagina_atendimentos_paciente() -> None:
         )
 
     with st.spinner("Buscando atendimentos...", show_time=True):
-        df = run_query(
-            """
-            SELECT id AS id_atendimento, data_hora, duracao_minutos,
-                   id_atuacao_residente, id_atuacao_preceptor, id_unidade
-            FROM atendimento
-            WHERE id_paciente = %(id_paciente)s
-            ORDER BY data_hora ASC
-            """,
-            {"id_paciente": int(paciente.id)},
+        df = dto_dataframe(
+            executar_leitura(listar_atendimentos_paciente, int(paciente.id))
         )
 
     if df.empty:
@@ -328,20 +215,11 @@ def pagina_procedimentos_atendimento() -> None:
         )
 
     with st.spinner("Buscando procedimentos...", show_time=True):
-        df = run_query(
-            """
-            SELECT
-                pr.id_procedimento,
-                p.nome,
-                pr.quantidade,
-                pr.tempo_real_minutos,
-                pr.faturado,
-                pr.observacao
-            FROM procedimento_realizado AS pr
-            JOIN procedimento AS p ON p.id = pr.id_procedimento
-            WHERE pr.id_atendimento = %(id_atendimento)s
-            """,
-            {"id_atendimento": int(atendimento.id)},
+        df = dto_dataframe(
+            executar_leitura(
+                listar_procedimentos_atendimento,
+                int(atendimento.id),
+            )
         )
 
     if df.empty:
@@ -416,15 +294,16 @@ def pagina_atualizar_paciente() -> None:
     if atualizar:
         try:
             with st.spinner("Atualizando convênio...", show_time=True):
-                resultado = run_command(
-                    "SELECT * FROM atualizar_num_convenio_paciente(%s, %s)",
-                    (int(paciente.id), novo_convenio),
+                resultado = executar_escrita(
+                    atualizar_convenio_paciente,
+                    int(paciente.id),
+                    novo_convenio or None,
                 )
             st.success(
-                f"Convênio atualizado para “{resultado.iloc[0]['num_convenio']}”.",
+                f"Convênio atualizado para “{resultado.num_convenio or 'não informado'}”.",
                 icon=":material/check_circle:",
             )
-        except psycopg.Error as exc:
+        except (psycopg.Error, SQLAlchemyError) as exc:
             mostrar_erro_banco(exc, "Não foi possível atualizar o convênio.")
 
 
@@ -452,18 +331,16 @@ def _confirmar_remocao(atendimento_id: int, procedimento_id: int, nome: str) -> 
         if confirmar:
             try:
                 with st.spinner("Removendo procedimento...", show_time=True):
-                    resultado = run_command(
-                        "SELECT * FROM remover_procedimento_realizado_nao_faturado(%s, %s)",
-                        (atendimento_id, procedimento_id),
+                    resultado = executar_escrita(
+                        remover_procedimento_nao_faturado,
+                        atendimento_id,
+                        procedimento_id,
                     )
-                if resultado.empty:
-                    st.warning("Nenhum registro foi removido.")
-                else:
-                    st.session_state["mensagem_remocao"] = (
-                        "Procedimento removido com sucesso."
-                    )
-                    st.rerun()
-            except psycopg.Error as exc:
+                st.session_state["mensagem_remocao"] = (
+                    f"Procedimento {resultado.id_procedimento} removido com sucesso."
+                )
+                st.rerun()
+            except (psycopg.Error, SQLAlchemyError) as exc:
                 mostrar_erro_banco(exc, "Não foi possível remover o procedimento.")
         if cancelar:
             st.rerun()
@@ -499,14 +376,11 @@ def pagina_remover_procedimento() -> None:
         )
 
         with st.spinner("Carregando procedimentos...", show_time=True):
-            procedimentos = run_query(
-                """
-                SELECT pr.id_procedimento, p.nome, pr.faturado
-                FROM procedimento_realizado pr
-                JOIN procedimento p ON p.id = pr.id_procedimento
-                WHERE pr.id_atendimento = %(id_atendimento)s
-                """,
-                {"id_atendimento": int(atendimento.id)},
+            procedimentos = dto_dataframe(
+                executar_leitura(
+                    listar_procedimentos_atendimento,
+                    int(atendimento.id),
+                )
             )
 
         if procedimentos.empty:
@@ -552,25 +426,7 @@ def pagina_tempo_medio_residente() -> None:
     )
 
     with st.spinner("Calculando tempos médios...", show_time=True):
-        df = run_query(
-            """
-            SELECT
-                medias.id_atuacao_residente,
-                pessoa.nome AS nome_profissional,
-                medias.tempo_medio_minutos
-            FROM (
-                SELECT id_atuacao_residente, AVG(duracao_minutos) AS tempo_medio_minutos
-                FROM atendimento
-                WHERE duracao_minutos IS NOT NULL AND duracao_minutos > 0
-                GROUP BY id_atuacao_residente
-            ) AS medias
-            JOIN atuacao_residente ON atuacao_residente.id = medias.id_atuacao_residente
-            JOIN atuacao_profissional ON atuacao_profissional.id = atuacao_residente.id
-            JOIN profissional ON profissional.id = atuacao_profissional.id_profissional
-            JOIN pessoa ON pessoa.id = profissional.id
-            ORDER BY medias.tempo_medio_minutos DESC, pessoa.nome ASC
-            """
-        )
+        df = dto_dataframe(executar_leitura(calcular_tempo_medio_por_residente))
 
     if df.empty:
         mostrar_estado_vazio(
@@ -629,17 +485,7 @@ def pagina_tempo_medio_residente() -> None:
 
 def mostrar_ranking_residentes() -> None:
     with st.spinner("Montando ranking...", show_time=True):
-        df = run_query(
-            """
-            SELECT p.nome, COUNT(a.id) AS total_atendimentos
-            FROM pessoa p
-            JOIN atuacao_profissional ap ON p.id = ap.id_profissional
-            JOIN atuacao_residente ar ON ap.id = ar.id
-            LEFT JOIN atendimento a ON ar.id = a.id_atuacao_residente
-            GROUP BY p.id, p.nome
-            ORDER BY total_atendimentos DESC
-            """
-        )
+        df = dto_dataframe(executar_leitura(ranking_residentes_por_atendimentos))
     if df.empty:
         mostrar_estado_vazio(
             "Ranking indisponível",
@@ -692,19 +538,11 @@ def mostrar_supervisao_mensal() -> None:
             help="A consulta considera o mês correspondente à data escolhida.",
         )
     with st.spinner("Consultando supervisões...", show_time=True):
-        df = run_query(
-            """
-            SELECT p.nome, COUNT(a.id) AS total_supervisionado
-            FROM pessoa p
-            JOIN atuacao_profissional ap ON p.id = ap.id_profissional
-            JOIN atuacao_preceptor apre ON ap.id = apre.id
-            JOIN atendimento a ON apre.id = a.id_atuacao_preceptor
-            WHERE a.data_hora >= %(mes_referencia)s
-              AND a.data_hora < %(mes_referencia)s::date + interval '1 month'
-            GROUP BY p.id, p.nome
-            HAVING COUNT(a.id) > 5
-            """,
-            {"mes_referencia": mes_referencia},
+        df = dto_dataframe(
+            executar_leitura(
+                preceptores_com_mais_de_cinco_atendimentos,
+                mes_referencia,
+            )
         )
     if df.empty:
         mostrar_estado_vazio(
@@ -738,19 +576,8 @@ def mostrar_supervisao_mensal() -> None:
 
 def mostrar_plantoes_unidade() -> None:
     with st.spinner("Consultando escalas...", show_time=True):
-        df = run_query(
-            """
-            SELECT u.nome AS unidade, p.nome AS residente, COUNT(e.id) AS quantidade_plantoes
-            FROM unidade u
-            LEFT JOIN escala e ON u.id = e.id_unidade
-                AND e.data_plantao >= date_trunc('month', CURRENT_DATE)
-                AND e.data_plantao < date_trunc('month', CURRENT_DATE) + interval '1 month'
-            LEFT JOIN atuacao_residente ar ON e.id_atuacao_residente = ar.id
-            LEFT JOIN atuacao_profissional ap ON ar.id = ap.id
-            LEFT JOIN pessoa p ON ap.id_profissional = p.id
-            GROUP BY u.id, u.nome, p.id, p.nome
-            ORDER BY u.nome ASC, quantidade_plantoes DESC
-            """
+        df = dto_dataframe(
+            executar_leitura(plantoes_por_unidade_e_residente, date.today())
         )
     if df.empty:
         mostrar_estado_vazio(
@@ -783,19 +610,8 @@ def mostrar_plantoes_unidade() -> None:
 
 def mostrar_pacientes_sem_alto_risco() -> None:
     with st.spinner("Analisando histórico de risco...", show_time=True):
-        df = run_query(
-            """
-            SELECT pes.nome, pac.num_convenio
-            FROM pessoa pes
-            JOIN paciente pac ON pes.id = pac.id
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM atendimento a
-                JOIN procedimento_realizado pr ON a.id = pr.id_atendimento
-                JOIN procedimento proc ON pr.id_procedimento = proc.id
-                WHERE a.id_paciente = pac.id AND proc.nivel_risco = 'alto'
-            )
-            """
+        df = dto_dataframe(
+            executar_leitura(pacientes_sem_procedimento_alto_risco)
         )
     if df.empty:
         mostrar_estado_vazio(
@@ -864,9 +680,9 @@ def criar_navegacao() -> st.navigation:
         "Atendimentos": [
             st.Page(
                 str(PAGES_DIR / "novo_atendimento.py"),
-                title="Novo atendimento",
+                title="Atendimento completo",
                 icon=":material/add_circle:",
-                url_path="novo-atendimento",
+                url_path="atendimento-completo",
             ),
             st.Page(
                 str(PAGES_DIR / "historico_paciente.py"),
@@ -901,6 +717,26 @@ def criar_navegacao() -> st.navigation:
                 title="Consultas analíticas",
                 icon=":material/monitoring:",
                 url_path="consultas-analiticas",
+            ),
+        ],
+        "Etapa 2": [
+            st.Page(
+                str(PAGES_DIR / "reajustar_escala.py"),
+                title="Reajustar escala",
+                icon=":material/calendar_month:",
+                url_path="reajustar-escala",
+            ),
+            st.Page(
+                str(PAGES_DIR / "painel_etapa2.py"),
+                title="Painel da Etapa 2",
+                icon=":material/query_stats:",
+                url_path="painel-etapa2",
+            ),
+            st.Page(
+                str(PAGES_DIR / "evidencias_tecnicas.py"),
+                title="Evidências técnicas",
+                icon=":material/fact_check:",
+                url_path="evidencias-tecnicas",
             ),
         ],
         "Administração": [

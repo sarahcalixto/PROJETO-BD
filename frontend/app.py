@@ -10,7 +10,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from projeto_hospital.ui.components import aplicar_estilos, cabecalho_pagina
-from projeto_hospital.ui.data import get_connection
+from projeto_hospital.ui.data import validar_banco_etapa2
 from projeto_hospital.ui.pages import criar_navegacao
 
 st.set_page_config(
@@ -28,7 +28,7 @@ st.logo(
 )
 
 try:
-    get_connection()
+    validar_banco_etapa2()
 except Exception as exc:  # noqa: BLE001
     with st.sidebar:
         st.badge("Banco desconectado", icon=":material/database_off:", color="red")
@@ -38,7 +38,8 @@ except Exception as exc:  # noqa: BLE001
         "O painel não conseguiu acessar o PostgreSQL configurado.",
     )
     st.error(
-        "Verifique se o serviço está ativo e se as variáveis do arquivo `.env` estão corretas.",
+        "Verifique o PostgreSQL, o arquivo `.env` e execute "
+        "`uv run python scripts/preparar_banco.py`.",
         icon=":material/error:",
     )
     with st.expander("Ver detalhes técnicos", icon=":material/code:"):
@@ -47,6 +48,6 @@ except Exception as exc:  # noqa: BLE001
 
 with st.sidebar:
     st.badge("Banco conectado", icon=":material/database:", color="green")
-    st.caption("Gestão hospitalar · SQL puro")
+    st.caption("SQLAlchemy + PostgreSQL")
 
 criar_navegacao().run()

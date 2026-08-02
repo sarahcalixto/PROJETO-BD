@@ -6,6 +6,9 @@ from collections.abc import Callable, Sequence
 
 import psycopg
 import streamlit as st
+from sqlalchemy.exc import SQLAlchemyError
+
+from projeto_hospital.services import ServicoORMError
 
 
 def aplicar_estilos() -> None:
@@ -90,5 +93,5 @@ def executar_pagina(pagina: Callable[[], None]) -> None:
     """Isola erros de leitura sem esconder falhas de programação."""
     try:
         pagina()
-    except psycopg.Error as exc:
+    except (psycopg.Error, SQLAlchemyError, ServicoORMError) as exc:
         mostrar_erro_banco(exc)

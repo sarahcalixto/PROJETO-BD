@@ -1,4 +1,4 @@
 from projeto_hospital.ui.components import executar_pagina
-from projeto_hospital.ui.pages import pagina_inserir_atendimento
+from projeto_hospital.ui.stage2 import pagina_atendimento_completo
 
-executar_pagina(pagina_inserir_atendimento)
+executar_pagina(pagina_atendimento_completo)
