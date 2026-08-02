@@ -32,7 +32,7 @@
 
 ## 5:15–6:25 — Concorrência
 
-- Executar `uv run python scripts/demonstrar_concorrencia.py`.
+- Abrir **Evidências técnicas → Concorrência** e confirmar a demonstração.
 - Narrar: T1 mantém lock, T2 espera, T1 confirma, T2 é rejeitada.
 - Mostrar no resultado que existe somente uma escala no destino.
 
@@ -45,8 +45,8 @@
 ## 7:30–8:00 — Encerramento
 
 - Resumir decisões e resultados.
-- Informar que a gravação valida a entrega e que o ajuste visual do front será
-  feito depois, sem ter alterado a interface nesta integração.
+- Encerrar mostrando que operações, consultas e evidências da Etapa 2 estão
+  disponíveis no front e que somente a publicação do vídeo era manual.
 
 ## Checklist antes de gravar
 

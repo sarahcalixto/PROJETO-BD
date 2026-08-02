@@ -66,9 +66,8 @@ uma confirmação, uma rejeição, uma única escala final e os logs da espera.
 A suíte é dividida por procedures, triggers, views, operações ORM, consultas
 avançadas, concorrência e entrega. Ela também verifica rollback, resultados
 vazios, entidades ausentes, JSON inválido, valores exatos e objetos instalados
-no catálogo do PostgreSQL. A interface atual é executada apenas como teste de
-regressão nesta rodada.
+no catálogo do PostgreSQL. A interface usa os serviços ORM e disponibiliza
+operações, views, consultas avançadas e evidências técnicas sob demanda.
 
-Ainda faltam duas atividades manuais: gravar o vídeo de até oito minutos e,
-depois da validação da equipe, adaptar o front aos novos fluxos ORM. Por isso a
-Etapa 2 não recebe tag final neste momento.
+Falta apenas a atividade manual de gravar o vídeo de até oito minutos. Por isso
+a Etapa 2 ainda não recebe tag final neste momento.

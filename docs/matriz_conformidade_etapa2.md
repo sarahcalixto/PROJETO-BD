@@ -1,8 +1,8 @@
 # Matriz de conformidade — Etapa 2
 
-Última validação: 2 de agosto de 2026. A suíte completa terminou com **97 testes
-aprovados e nenhuma falha**. O vídeo e o ajuste do front são deliberadamente
-posteriores e não são marcados como concluídos.
+Última validação: 2 de agosto de 2026. A suíte completa terminou com **104 testes
+aprovados e nenhuma falha**. A gravação do vídeo permanece como atividade
+manual posterior.
 
 | Grupo | Requisito | Implementação | Evidência de teste | Resultado |
 |---|---|---|---|---|
@@ -21,4 +21,4 @@ posteriores e não são marcados como concluídos.
 | 6 | Duas sessões e lock pessimista | `services/concorrencia.py` | `tests/test_aceitacao_etapa2.py` | **Aprovado** |
 | 7 | README, relatório, matriz e roteiro | `README.md`, `docs/` | grupo 7 da suíte de aceitação | **Aprovado** |
 | 7 | Vídeo de até 8 minutos | gravação manual | conferência manual | **Pendente** |
-| Extra | Ajuste final do front | rodada posterior | regressão `tests/test_app.py` | **Pendente por escopo** |
+| Extra | Front final da Etapa 2 | `frontend/` e `ui/stage2.py` | `tests/test_app.py` | **Aprovado** |
