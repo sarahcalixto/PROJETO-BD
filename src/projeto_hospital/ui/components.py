@@ -84,7 +84,15 @@ def mostrar_erro_banco(
     mensagem: str = "Não foi possível carregar os dados desta página.",
 ) -> None:
     """Apresenta uma mensagem amigável e mantém o detalhe técnico acessível."""
-    st.error(mensagem, icon=":material/error:")
+    origem = getattr(exc, "orig", exc)
+    diagnostico = getattr(origem, "diag", None)
+    detalhe = (
+        str(exc)
+        if isinstance(exc, ServicoORMError)
+        else getattr(diagnostico, "message_primary", None)
+    )
+    texto = f"{mensagem} {detalhe}" if detalhe else mensagem
+    st.error(texto, icon=":material/error:")
     with st.expander("Ver detalhes técnicos", icon=":material/code:"):
         st.code(str(exc), language=None)
 

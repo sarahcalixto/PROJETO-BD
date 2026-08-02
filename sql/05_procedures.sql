@@ -42,8 +42,10 @@ BEGIN
             USING ERRCODE = 'not_null_violation';
     END IF;
 
-    IF p_duracao_minutos IS NULL OR p_duracao_minutos <= 0 THEN
-        RAISE EXCEPTION 'A duracao do atendimento deve ser positiva.'
+    IF p_duracao_minutos IS NULL
+       OR p_duracao_minutos <= 0
+       OR p_duracao_minutos > 1440 THEN
+        RAISE EXCEPTION 'A duracao do atendimento deve estar entre 1 e 1440 minutos.'
             USING ERRCODE = 'check_violation';
     END IF;
 
@@ -100,6 +102,50 @@ BEGIN
             p_id_atuacao_residente,
             p_data_hora
             USING ERRCODE = 'check_violation';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM atuacao_profissional AS residente
+        JOIN atuacao_profissional AS preceptor
+          ON preceptor.id = p_id_atuacao_preceptor
+        WHERE residente.id = p_id_atuacao_residente
+          AND residente.id_profissional = preceptor.id_profissional
+    ) THEN
+        RAISE EXCEPTION
+            'Residente e preceptor devem ser profissionais diferentes.'
+            USING ERRCODE = 'check_violation';
+    END IF;
+
+    -- Serializa reenvios da mesma combinação mesmo quando ainda não existe linha.
+    PERFORM pg_advisory_xact_lock(
+        hashtextextended(
+            concat_ws(
+                '|',
+                p_data_hora,
+                p_duracao_minutos,
+                p_id_paciente,
+                p_id_atuacao_residente,
+                p_id_atuacao_preceptor,
+                p_id_unidade
+            ),
+            0
+        )
+    );
+
+    IF EXISTS (
+        SELECT 1
+        FROM atendimento AS a
+        WHERE a.data_hora = p_data_hora
+          AND a.duracao_minutos = p_duracao_minutos
+          AND a.id_paciente = p_id_paciente
+          AND a.id_atuacao_residente = p_id_atuacao_residente
+          AND a.id_atuacao_preceptor = p_id_atuacao_preceptor
+          AND a.id_unidade = p_id_unidade
+    ) THEN
+        RAISE EXCEPTION
+            'Atendimento possivelmente duplicado; revise os dados antes de reenviar.'
+            USING ERRCODE = 'unique_violation';
     END IF;
 
     IF NOT EXISTS (
@@ -227,6 +273,15 @@ BEGIN
         IF v_data_hora_inicio < p_data_hora THEN
             RAISE EXCEPTION
                 'Inicio do procedimento no item % nao pode preceder o atendimento.',
+                v_ordem
+                USING ERRCODE = 'check_violation';
+        END IF;
+
+        IF v_data_hora_inicio
+           + make_interval(mins => v_tempo_real_minutos)
+           > p_data_hora + make_interval(mins => p_duracao_minutos) THEN
+            RAISE EXCEPTION
+                'Procedimento no item % termina depois do atendimento.',
                 v_ordem
                 USING ERRCODE = 'check_violation';
         END IF;

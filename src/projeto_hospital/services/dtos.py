@@ -19,8 +19,19 @@ class AtendimentoDTO:
 
 
 @dataclass(frozen=True, slots=True)
+class AtendimentoHistoricoDTO:
+    id_atendimento: int
+    data_hora: datetime
+    duracao_minutos: int
+    residente: str
+    preceptor: str
+    unidade: str
+
+
+@dataclass(frozen=True, slots=True)
 class ProcedimentoAtendimentoDTO:
     id_procedimento: int
+    codigo: int
     nome: str
     quantidade: int
     tempo_real_minutos: int

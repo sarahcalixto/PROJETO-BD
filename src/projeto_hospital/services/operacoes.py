@@ -6,7 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, aliased, selectinload
 
 from projeto_hospital.orm import (
     Atendimento,
@@ -21,6 +21,7 @@ from projeto_hospital.orm import (
 )
 from projeto_hospital.services.dtos import (
     AtendimentoDTO,
+    AtendimentoHistoricoDTO,
     ConvenioPacienteDTO,
     MediaResidenteDTO,
     ProcedimentoAtendimentoDTO,
@@ -93,19 +94,46 @@ def inserir_atendimento_validado(session: Session, *, id_atendimento: int, data_
     return _atendimento_dto(atendimento)
 
 
-def listar_atendimentos_paciente(session: Session, id_paciente: int) -> list[AtendimentoDTO]:
+def listar_atendimentos_paciente(
+    session: Session,
+    id_paciente: int,
+) -> list[AtendimentoHistoricoDTO]:
     """Lista cronologicamente os atendimentos de um paciente existente."""
 
     if session.get(Paciente, id_paciente) is None:
         raise EntidadeNaoEncontrada("Paciente", id_paciente)
 
-    atendimentos = session.scalars(
-        select(Atendimento)
+    pessoa_residente = aliased(Pessoa)
+    pessoa_preceptor = aliased(Pessoa)
+    atuacao_residente = aliased(AtuacaoProfissional)
+    atuacao_preceptor = aliased(AtuacaoProfissional)
+    rows = session.execute(
+        select(
+            Atendimento.id,
+            Atendimento.data_hora,
+            Atendimento.duracao_minutos,
+            pessoa_residente.nome,
+            pessoa_preceptor.nome,
+            Unidade.nome,
+        )
+        .join(AtuacaoResidente, AtuacaoResidente.id == Atendimento.id_atuacao_residente)
+        .join(atuacao_residente, atuacao_residente.id == AtuacaoResidente.id)
+        .join(
+            pessoa_residente,
+            pessoa_residente.id == atuacao_residente.id_profissional,
+        )
+        .join(AtuacaoPreceptor, AtuacaoPreceptor.id == Atendimento.id_atuacao_preceptor)
+        .join(atuacao_preceptor, atuacao_preceptor.id == AtuacaoPreceptor.id)
+        .join(
+            pessoa_preceptor,
+            pessoa_preceptor.id == atuacao_preceptor.id_profissional,
+        )
+        .join(Unidade, Unidade.id == Atendimento.id_unidade)
         .where(Atendimento.id_paciente == id_paciente)
         .order_by(Atendimento.data_hora, Atendimento.id)
     ).all()
 
-    return [_atendimento_dto(atendimento) for atendimento in atendimentos]
+    return [AtendimentoHistoricoDTO(*row) for row in rows]
 
 
 def listar_procedimentos_atendimento(session: Session, id_atendimento: int) -> list[ProcedimentoAtendimentoDTO]:
@@ -132,6 +160,7 @@ def listar_procedimentos_atendimento(session: Session, id_atendimento: int) -> l
     return [
         ProcedimentoAtendimentoDTO(
             id_procedimento=realizacao.id_procedimento,
+            codigo=realizacao.procedimento.codigo,
             nome=realizacao.procedimento.nome,
             quantidade=realizacao.quantidade,
             tempo_real_minutos=realizacao.tempo_real_minutos,

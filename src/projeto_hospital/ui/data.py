@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import asdict, is_dataclass
+from datetime import date
 from typing import Any, TypeVar
 
 import pandas as pd
@@ -105,13 +106,14 @@ def listar_pacientes() -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["id", "nome", "num_convenio", "grupo_sanguineo"])
 
 
-def listar_atuacoes(tipo: str) -> pd.DataFrame:
+def listar_atuacoes(tipo: str, data_referencia: date | None = None) -> pd.DataFrame:
     subtipo = AtuacaoResidente if tipo == "residente" else AtuacaoPreceptor
     with get_session_factory()() as session:
-        rows = session.execute(
+        statement = (
             select(
                 subtipo.id,
                 Pessoa.nome,
+                Profissional.crm,
                 AtuacaoProfissional.data_inicio,
                 AtuacaoProfissional.data_fim,
             )
@@ -119,8 +121,18 @@ def listar_atuacoes(tipo: str) -> pd.DataFrame:
             .join(Profissional, Profissional.id == AtuacaoProfissional.id_profissional)
             .join(Pessoa, Pessoa.id == Profissional.id)
             .order_by(Pessoa.nome)
-        ).all()
-    return pd.DataFrame(rows, columns=["id", "nome", "data_inicio", "data_fim"])
+        )
+        if data_referencia is not None:
+            statement = statement.where(
+                AtuacaoProfissional.data_inicio <= data_referencia,
+                (AtuacaoProfissional.data_fim.is_(None))
+                | (AtuacaoProfissional.data_fim >= data_referencia),
+            )
+        rows = session.execute(statement).all()
+    return pd.DataFrame(
+        rows,
+        columns=["id", "nome", "crm", "data_inicio", "data_fim"],
+    )
 
 
 def listar_unidades() -> pd.DataFrame:
@@ -136,6 +148,7 @@ def listar_procedimentos_catalogo() -> pd.DataFrame:
         rows = session.execute(
             select(
                 Procedimento.id,
+                Procedimento.codigo,
                 Procedimento.nome,
                 Procedimento.nivel_risco,
                 Procedimento.tempo_medio_minutos,
@@ -143,7 +156,7 @@ def listar_procedimentos_catalogo() -> pd.DataFrame:
         ).all()
     return pd.DataFrame(
         rows,
-        columns=["id", "nome", "nivel_risco", "tempo_medio_minutos"],
+        columns=["id", "codigo", "nome", "nivel_risco", "tempo_medio_minutos"],
     )
 
 

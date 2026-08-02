@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import SmallInteger, bindparam, cast, func, literal, select
@@ -22,12 +22,57 @@ def registrar_atendimento_completo(
     session: Session,
     entrada: AtendimentoCompletoInput,
 ) -> int:
+    if not isinstance(entrada.data_hora, datetime):
+        raise RegraNegocioViolada("Informe uma data e hora válidas")
+    if (
+        not isinstance(entrada.duracao_minutos, int)
+        or isinstance(entrada.duracao_minutos, bool)
+        or not 1 <= entrada.duracao_minutos <= 1440
+    ):
+        raise RegraNegocioViolada("A duração deve estar entre 1 e 1440 minutos")
     if not entrada.procedimentos:
         raise RegraNegocioViolada("Informe pelo menos um procedimento")
 
     ids = [item.id_procedimento for item in entrada.procedimentos]
     if len(ids) != len(set(ids)):
         raise RegraNegocioViolada("O mesmo procedimento não pode ser repetido")
+
+    fim_atendimento = entrada.data_hora + timedelta(
+        minutes=entrada.duracao_minutos
+    )
+    for posicao, item in enumerate(entrada.procedimentos, start=1):
+        if (
+            not isinstance(item.quantidade, int)
+            or isinstance(item.quantidade, bool)
+            or item.quantidade <= 0
+        ):
+            raise RegraNegocioViolada(
+                f"A quantidade do procedimento {posicao} deve ser positiva"
+            )
+        if (
+            not isinstance(item.tempo_real_minutos, int)
+            or isinstance(item.tempo_real_minutos, bool)
+            or item.tempo_real_minutos <= 0
+        ):
+            raise RegraNegocioViolada(
+                f"O tempo real do procedimento {posicao} deve ser positivo"
+            )
+        if not isinstance(item.data_hora_inicio, datetime):
+            raise RegraNegocioViolada(
+                f"Informe um início válido para o procedimento {posicao}"
+            )
+        if item.data_hora_inicio < entrada.data_hora:
+            raise RegraNegocioViolada(
+                f"O procedimento {posicao} começa antes do atendimento"
+            )
+        if (
+            item.data_hora_inicio
+            + timedelta(minutes=item.tempo_real_minutos)
+            > fim_atendimento
+        ):
+            raise RegraNegocioViolada(
+                f"O procedimento {posicao} termina depois do atendimento"
+            )
 
     procedimentos = [
         {

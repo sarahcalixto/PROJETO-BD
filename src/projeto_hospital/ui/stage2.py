@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from math import isfinite
 
 import pandas as pd
+import psycopg
 import streamlit as st
+from sqlalchemy.exc import SQLAlchemyError
 
 from projeto_hospital.services import (
     AtendimentoCompletoInput,
     ProcedimentoCompletoInput,
+    RegraNegocioViolada,
     calcular_tempo_medio_espera,
     demonstrar_concorrencia_escala,
     medir_lazy_e_eager,
@@ -21,6 +25,7 @@ from projeto_hospital.services import (
 )
 from projeto_hospital.ui.components import (
     cabecalho_pagina,
+    mostrar_erro_banco,
     mostrar_estado_vazio,
     mostrar_metricas,
 )
@@ -45,21 +50,15 @@ ROTULOS_TURNO = {"manha": "Manhã", "tarde": "Tarde", "noite": "Noite"}
 
 def _editor_procedimentos(
     catalogo: pd.DataFrame,
-    inicio_padrao: datetime,
 ) -> pd.DataFrame:
-    nomes = catalogo["nome"].tolist()
-    inicial = pd.DataFrame(
-        {
-            "Procedimento": pd.Series([nomes[0]], dtype="string"),
-            "Quantidade": pd.Series([1], dtype="int64"),
-            "Tempo real (min)": pd.Series(
-                [int(catalogo.iloc[0]["tempo_medio_minutos"])], dtype="int64"
-            ),
-            "Início": pd.Series([inicio_padrao], dtype="datetime64[ns]"),
-            "Observação": pd.Series([""], dtype="string"),
-            "Faturado": pd.Series([False], dtype="bool"),
-        }
-    )
+    opcoes = [f"{int(item.codigo)} — {item.nome}" for item in catalogo.itertuples()]
+    inicial = pd.DataFrame({
+        "Procedimento": pd.Series(dtype="string"),
+        "Quantidade": pd.Series(dtype="Int64"),
+        "Tempo real (min)": pd.Series(dtype="Int64"),
+        "Início": pd.Series(dtype="datetime64[ns]"),
+        "Observação": pd.Series(dtype="string"),
+    })
     return st.data_editor(
         inicial,
         key="atendimento_completo_procedimentos",
@@ -68,21 +67,132 @@ def _editor_procedimentos(
         width="stretch",
         column_config={
             "Procedimento": st.column_config.SelectboxColumn(
-                "Procedimento", options=nomes, required=True
+                "Procedimento *", options=opcoes, required=True
             ),
             "Quantidade": st.column_config.NumberColumn(
-                "Quantidade", min_value=1, step=1, required=True
+                "Quantidade *", min_value=1, max_value=9999, step=1, required=True
             ),
             "Tempo real (min)": st.column_config.NumberColumn(
-                "Tempo real (min)", min_value=1, step=1, required=True
+                "Tempo real (min) *", min_value=1, max_value=1440, step=1, required=True
             ),
             "Início": st.column_config.DatetimeColumn(
-                "Início", format="DD/MM/YYYY HH:mm", required=True
+                "Início *", format="DD/MM/YYYY HH:mm", required=True
             ),
-            "Observação": st.column_config.TextColumn("Observação"),
-            "Faturado": st.column_config.CheckboxColumn("Faturado"),
+            "Observação": st.column_config.TextColumn(
+                "Observação (opcional)",
+                help="Preencha somente quando houver intercorrência ou informação relevante.",
+            ),
         },
     )
+
+
+def _ausente(valor: object) -> bool:
+    if valor is None:
+        return True
+    try:
+        return bool(pd.isna(valor))
+    except (TypeError, ValueError):
+        return False
+
+
+def _linha_vazia(row: pd.Series) -> bool:
+    observacao = row.get("Observação")
+    valores = (
+        row.get("Procedimento"),
+        row.get("Quantidade"),
+        row.get("Tempo real (min)"),
+        row.get("Início"),
+    )
+    return all(_ausente(valor) for valor in valores) and (
+        _ausente(observacao) or not str(observacao).strip()
+    )
+
+
+def _inteiro_positivo(valor: object, campo: str, linha: int) -> int:
+    if _ausente(valor):
+        raise RegraNegocioViolada(f"Preencha {campo} na linha {linha}.")
+    try:
+        numero = float(valor)
+    except (TypeError, ValueError) as exc:
+        raise RegraNegocioViolada(
+            f"{campo.capitalize()} inválido na linha {linha}."
+        ) from exc
+    if not isfinite(numero) or not numero.is_integer() or numero <= 0:
+        raise RegraNegocioViolada(
+            f"{campo.capitalize()} deve ser um inteiro positivo na linha {linha}."
+        )
+    return int(numero)
+
+
+def _preparar_procedimentos(
+    procedimentos_df: pd.DataFrame,
+    catalogo: pd.DataFrame,
+    data_hora: datetime,
+    duracao_minutos: int,
+) -> tuple[ProcedimentoCompletoInput, ...]:
+    linhas = [row for _, row in procedimentos_df.iterrows() if not _linha_vazia(row)]
+    if not linhas:
+        raise RegraNegocioViolada("Informe pelo menos um procedimento.")
+
+    ids_por_rotulo = {
+        f"{int(item.codigo)} — {item.nome}": int(item.id)
+        for item in catalogo.itertuples()
+    }
+    itens: list[ProcedimentoCompletoInput] = []
+    ids_informados: set[int] = set()
+    fim_atendimento = data_hora + timedelta(minutes=duracao_minutos)
+
+    for posicao, row in enumerate(linhas, start=1):
+        rotulo = row.get("Procedimento")
+        if _ausente(rotulo) or rotulo not in ids_por_rotulo:
+            raise RegraNegocioViolada(
+                f"Selecione um procedimento válido na linha {posicao}."
+            )
+        quantidade = _inteiro_positivo(row.get("Quantidade"), "a quantidade", posicao)
+        tempo_real = _inteiro_positivo(
+            row.get("Tempo real (min)"), "o tempo real", posicao
+        )
+        inicio_valor = row.get("Início")
+        if _ausente(inicio_valor):
+            raise RegraNegocioViolada(f"Preencha o início na linha {posicao}.")
+        try:
+            inicio = pd.Timestamp(inicio_valor).to_pydatetime()
+        except (TypeError, ValueError) as exc:
+            raise RegraNegocioViolada(
+                f"Início inválido na linha {posicao}."
+            ) from exc
+        if inicio < data_hora:
+            raise RegraNegocioViolada(
+                f"O procedimento da linha {posicao} começa antes do atendimento."
+            )
+        if inicio + timedelta(minutes=tempo_real) > fim_atendimento:
+            raise RegraNegocioViolada(
+                f"O procedimento da linha {posicao} termina depois do atendimento."
+            )
+
+        id_procedimento = ids_por_rotulo[str(rotulo)]
+        if id_procedimento in ids_informados:
+            raise RegraNegocioViolada(
+                f"O procedimento da linha {posicao} já foi informado."
+            )
+        ids_informados.add(id_procedimento)
+        observacao_valor = row.get("Observação")
+        observacao = (
+            None
+            if _ausente(observacao_valor) or not str(observacao_valor).strip()
+            else str(observacao_valor).strip()
+        )
+        itens.append(
+            ProcedimentoCompletoInput(
+                id_procedimento=id_procedimento,
+                quantidade=quantidade,
+                tempo_real_minutos=tempo_real,
+                data_hora_inicio=inicio,
+                observacao=observacao,
+                faturado=False,
+            )
+        )
+    return tuple(itens)
 
 
 def pagina_atendimento_completo() -> None:
@@ -91,9 +201,15 @@ def pagina_atendimento_completo() -> None:
         "Atendimento completo",
         "Registre atendimento e procedimentos em uma única transação atômica.",
     )
+    agora = datetime.now().replace(second=0, microsecond=0)
+    data_atendimento = st.date_input(
+        "Data do atendimento *",
+        value=agora.date(),
+        help="A data define quais atuações profissionais estão vigentes.",
+    )
     pacientes = listar_pacientes()
-    residentes = listar_atuacoes("residente")
-    preceptores = listar_atuacoes("preceptor")
+    residentes = listar_atuacoes("residente", data_atendimento)
+    preceptores = listar_atuacoes("preceptor", data_atendimento)
     unidades = listar_unidades()
     catalogo = listar_procedimentos_catalogo()
     if any(
@@ -106,44 +222,69 @@ def pagina_atendimento_completo() -> None:
         )
         return
 
-    agora = datetime.now().replace(second=0, microsecond=0)
-    with st.form("form_atendimento_completo", border=True):
+    pacientes_por_id = {int(item.id): item for item in pacientes.itertuples()}
+    residentes_por_id = {int(item.id): item for item in residentes.itertuples()}
+    preceptores_por_id = {int(item.id): item for item in preceptores.itertuples()}
+    unidades_por_id = {int(item.id): item for item in unidades.itertuples()}
+
+    with st.form("form_atendimento_completo", border=True, clear_on_submit=True):
         with st.container(horizontal=True, gap="medium"):
             with st.container(width="stretch"):
-                data_atendimento = st.date_input("Data", value=agora.date())
-                hora_atendimento = st.time_input("Hora", value=agora.time())
+                hora_atendimento = st.time_input("Hora *", value=agora.time())
                 duracao = st.number_input(
-                    "Duração em minutos", min_value=1, value=30, step=5
+                    "Duração em minutos *",
+                    min_value=1,
+                    max_value=1440,
+                    value=None,
+                    step=5,
+                    placeholder="Informe a duração",
                 )
-                paciente = st.selectbox(
-                    "Paciente",
-                    pacientes.itertuples(),
-                    format_func=lambda item: f"{item.nome} (id {item.id})",
+                id_paciente = st.selectbox(
+                    "Paciente *",
+                    tuple(pacientes_por_id),
+                    index=None,
+                    placeholder="Selecione o paciente",
+                    format_func=lambda identificador: (
+                        f"{pacientes_por_id[identificador].nome} — convênio "
+                        f"{pacientes_por_id[identificador].num_convenio or 'não informado'}"
+                    ),
                 )
             with st.container(width="stretch"):
-                residente = st.selectbox(
-                    "Residente (atuação)",
-                    residentes.itertuples(),
-                    format_func=lambda item: label_atuacao(
-                        pd.Series(item._asdict())
+                id_residente = st.selectbox(
+                    "Residente (atuação) *",
+                    tuple(residentes_por_id),
+                    index=None,
+                    placeholder="Selecione o residente",
+                    format_func=lambda identificador: label_atuacao(
+                        pd.Series(residentes_por_id[identificador]._asdict())
                     ),
                 )
-                preceptor = st.selectbox(
-                    "Preceptor (atuação)",
-                    preceptores.itertuples(),
-                    format_func=lambda item: label_atuacao(
-                        pd.Series(item._asdict())
+                id_preceptor = st.selectbox(
+                    "Preceptor (atuação) *",
+                    tuple(preceptores_por_id),
+                    index=None,
+                    placeholder="Selecione o preceptor",
+                    format_func=lambda identificador: label_atuacao(
+                        pd.Series(preceptores_por_id[identificador]._asdict())
                     ),
                 )
-                unidade = st.selectbox(
-                    "Unidade",
-                    unidades.itertuples(),
-                    format_func=lambda item: f"{item.nome} ({item.tipo})",
+                id_unidade = st.selectbox(
+                    "Unidade *",
+                    tuple(unidades_por_id),
+                    index=None,
+                    placeholder="Selecione a unidade",
+                    format_func=lambda identificador: (
+                        f"{unidades_por_id[identificador].nome} "
+                        f"({unidades_por_id[identificador].tipo})"
+                    ),
                 )
 
         st.subheader("Procedimentos")
-        st.caption("Adicione ou remova linhas. Cada procedimento pode aparecer uma vez.")
-        procedimentos_df = _editor_procedimentos(catalogo, agora)
+        st.caption(
+            "Adicione pelo menos uma linha. Campos com * são obrigatórios e cada "
+            "procedimento pode aparecer uma vez. Novos procedimentos começam não faturados."
+        )
+        procedimentos_df = _editor_procedimentos(catalogo)
         enviar = st.form_submit_button(
             "Registrar atendimento completo",
             type="primary",
@@ -153,46 +294,46 @@ def pagina_atendimento_completo() -> None:
 
     if not enviar:
         return
-    data_hora = datetime.combine(data_atendimento, hora_atendimento)
-    linhas = procedimentos_df.dropna(subset=["Procedimento"])
-    if linhas.empty:
-        st.error("Informe pelo menos um procedimento.", icon=":material/error:")
-        return
-    if linhas["Procedimento"].duplicated().any():
-        st.error("Remova procedimentos duplicados.", icon=":material/error:")
-        return
-    if linhas["Início"].isna().any() or any(
-        pd.Timestamp(valor).to_pydatetime() < data_hora for valor in linhas["Início"]
-    ):
+    ausentes = [
+        rotulo
+        for rotulo, valor in (
+            ("o paciente", id_paciente),
+            ("o residente", id_residente),
+            ("o preceptor", id_preceptor),
+            ("a unidade", id_unidade),
+            ("a duração", duracao),
+        )
+        if valor is None
+    ]
+    if ausentes:
         st.error(
-            "O início de cada procedimento deve ser igual ou posterior ao atendimento.",
+            "Selecione ou informe " + ", ".join(ausentes) + ".",
             icon=":material/error:",
         )
         return
-
-    ids_por_nome = dict(zip(catalogo["nome"], catalogo["id"], strict=True))
-    itens = tuple(
-        ProcedimentoCompletoInput(
-            id_procedimento=int(ids_por_nome[row["Procedimento"]]),
-            quantidade=int(row["Quantidade"]),
-            tempo_real_minutos=int(row["Tempo real (min)"]),
-            data_hora_inicio=pd.Timestamp(row["Início"]).to_pydatetime(),
-            observacao=str(row["Observação"]).strip() or None,
-            faturado=bool(row["Faturado"]),
+    data_hora = datetime.combine(data_atendimento, hora_atendimento)
+    try:
+        itens = _preparar_procedimentos(
+            procedimentos_df, catalogo, data_hora, int(duracao)
         )
-        for _, row in linhas.iterrows()
-    )
+    except RegraNegocioViolada as exc:
+        st.error(str(exc), icon=":material/error:")
+        return
     entrada = AtendimentoCompletoInput(
         data_hora=data_hora,
         duracao_minutos=int(duracao),
-        id_paciente=int(paciente.id),
-        id_atuacao_residente=int(residente.id),
-        id_atuacao_preceptor=int(preceptor.id),
-        id_unidade=int(unidade.id),
+        id_paciente=int(id_paciente),
+        id_atuacao_residente=int(id_residente),
+        id_atuacao_preceptor=int(id_preceptor),
+        id_unidade=int(id_unidade),
         procedimentos=itens,
     )
-    with st.spinner("Registrando transação completa...", show_time=True):
-        id_criado = executar_escrita(registrar_atendimento_completo, entrada)
+    try:
+        with st.spinner("Registrando transação completa...", show_time=True):
+            id_criado = executar_escrita(registrar_atendimento_completo, entrada)
+    except (psycopg.Error, SQLAlchemyError, RegraNegocioViolada) as exc:
+        mostrar_erro_banco(exc, "Não foi possível registrar o atendimento.")
+        return
     st.success(
         f"Atendimento {id_criado} e {len(itens)} procedimento(s) registrados.",
         icon=":material/check_circle:",
@@ -250,12 +391,23 @@ def pagina_reajustar_escala() -> None:
         )
 
 
-def _mostrar_tabela(df: pd.DataFrame, titulo_vazio: str) -> None:
+def _mostrar_tabela(
+    df: pd.DataFrame,
+    titulo_vazio: str,
+    *,
+    exibir_ids_tecnicos: bool = False,
+) -> None:
     if df.empty:
         mostrar_estado_vazio(titulo_vazio, "A consulta não retornou registros.")
     else:
         mostrar_metricas([("Registros", len(df), None)])
-        st.dataframe(df, hide_index=True, width="stretch")
+        visual = df
+        if not exibir_ids_tecnicos:
+            visual = df.loc[
+                :,
+                [not str(coluna).startswith("id_") for coluna in df.columns],
+            ]
+        st.dataframe(visual, hide_index=True, width="stretch")
 
 
 def pagina_painel_etapa2() -> None:
@@ -340,7 +492,7 @@ def pagina_evidencias_tecnicas() -> None:
             ORDER BY tgname
             """
         )
-        _mostrar_tabela(df, "Triggers não encontrados")
+        _mostrar_tabela(df, "Triggers não encontrados", exibir_ids_tecnicos=True)
     elif escolha == "Auditoria":
         df = run_query(
             """
@@ -351,7 +503,7 @@ def pagina_evidencias_tecnicas() -> None:
             LIMIT 100
             """
         )
-        _mostrar_tabela(df, "Auditoria vazia")
+        _mostrar_tabela(df, "Auditoria vazia", exibir_ids_tecnicos=True)
     elif escolha == "Médias":
         df = run_query(
             """
@@ -367,7 +519,9 @@ def pagina_evidencias_tecnicas() -> None:
         paciente = st.selectbox(
             "Paciente para medição",
             pacientes.itertuples(),
-            format_func=lambda item: f"{item.nome} (id {item.id})",
+            format_func=lambda item: (
+                f"{item.nome} — convênio {item.num_convenio or 'não informado'}"
+            ),
         )
         resultado = medir_lazy_e_eager(
             get_session_factory(), int(paciente.id)

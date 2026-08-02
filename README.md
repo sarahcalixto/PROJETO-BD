@@ -15,6 +15,8 @@ avançadas e controle de concorrência, incluindo evidências no front.
 ## Instalação rápida
 
 ```bash
+git clone git@github.com:sarahcalixto/PROJETO-BD.git
+cd PROJETO-BD
 uv sync
 cp .env.example .env
 docker compose up -d --wait
@@ -43,6 +45,7 @@ O `.env` não deve ser versionado.
 ## Recursos disponíveis no front
 
 - atendimento completo com múltiplos procedimentos e rollback integral;
+- seleções obrigatórias sem valores presumidos e proteção contra reenvio;
 - histórico, convênio, procedimentos e análises usando SQLAlchemy ORM;
 - reajuste atômico de escala;
 - três views e três consultas ORM avançadas;

@@ -1,5 +1,6 @@
 """Serviços usados pelas novas páginas da Etapa 2."""
 
+from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal
 
@@ -49,6 +50,42 @@ def test_atendimento_completo_valida_itens_antes_do_banco(
 ) -> None:
     with pytest.raises(RegraNegocioViolada):
         registrar_atendimento_completo(orm_session, _entrada(*ids))
+
+
+@pytest.mark.parametrize(
+    "alteracao",
+    [
+        {"quantidade": 0},
+        {"tempo_real_minutos": 0},
+        {"data_hora_inicio": datetime(2026, 8, 20, 8, 59)},
+        {"data_hora_inicio": datetime(2026, 8, 20, 9, 30), "tempo_real_minutos": 20},
+    ],
+    ids=["quantidade", "tempo", "inicio-anterior", "termino-posterior"],
+)
+def test_atendimento_completo_valida_campos_e_janela_antes_do_banco(
+    orm_session: Session,
+    alteracao: dict[str, object],
+) -> None:
+    entrada = _entrada(1)
+    item = replace(entrada.procedimentos[0], **alteracao)
+
+    with pytest.raises(RegraNegocioViolada):
+        registrar_atendimento_completo(
+            orm_session,
+            replace(entrada, procedimentos=(item,)),
+        )
+
+
+def test_atendimento_completo_rejeita_duracao_fora_do_limite(
+    orm_session: Session,
+) -> None:
+    entrada = _entrada(1)
+    for duracao in (0, 1441):
+        with pytest.raises(RegraNegocioViolada):
+            registrar_atendimento_completo(
+                orm_session,
+                replace(entrada, duracao_minutos=duracao),
+            )
 
 
 def test_media_espera_e_medicao_de_loading(

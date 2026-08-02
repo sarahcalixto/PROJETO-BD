@@ -26,7 +26,9 @@ exceção reverte todas as alterações feitas pela rotina.
 `sp_registrar_atendimento_completo` valida referências e vigência, exige um
 array JSONB não vazio, cria o atendimento e percorre os procedimentos na ordem
 recebida. Um item inválido interrompe a instrução e nenhum registro parcial
-permanece. `sp_calcular_tempo_medio_espera` usa o primeiro início por
+permanece. A rotina também serializa reenvios idênticos, rejeita autosupervisão
+e garante que cada procedimento termine dentro da janela do atendimento.
+`sp_calcular_tempo_medio_espera` usa o primeiro início por
 atendimento. `sp_reajustar_escala` bloqueia a atuação do residente com
 `FOR UPDATE`, valida todo o destino e só então altera o conjunto.
 
@@ -68,6 +70,9 @@ avançadas, concorrência e entrega. Ela também verifica rollback, resultados
 vazios, entidades ausentes, JSON inválido, valores exatos e objetos instalados
 no catálogo do PostgreSQL. A interface usa os serviços ORM e disponibiliza
 operações, views, consultas avançadas e evidências técnicas sob demanda.
+O cadastro exige escolhas explícitas, inicia a grade de procedimentos vazia,
+valida linhas parciais antes do banco e apresenta o histórico com nomes e
+identificadores operacionais em vez de chaves internas.
 
 A implementação e as evidências exigidas para a Etapa 2 estão concluídas. A tag
 final poderá ser criada após o merge e a publicação da branch de entrega.

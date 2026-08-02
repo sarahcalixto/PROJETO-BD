@@ -18,6 +18,7 @@ from projeto_hospital.services.concorrencia import (
 from projeto_hospital.services.carregamento import medir_lazy_e_eager
 from projeto_hospital.services.dtos import (
     AtendimentoDTO,
+    AtendimentoHistoricoDTO,
     AtendimentoCompletoInput,
     ConvenioPacienteDTO,
     MediaResidenteDTO,
@@ -57,6 +58,7 @@ from projeto_hospital.services.operacoes import (
 
 __all__ = [
     "AtendimentoDTO",
+    "AtendimentoHistoricoDTO",
     "AtendimentoCompletoInput",
     "ConvenioPacienteDTO",
     "EntidadeNaoEncontrada",

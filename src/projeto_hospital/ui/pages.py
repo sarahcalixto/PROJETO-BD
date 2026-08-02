@@ -42,7 +42,8 @@ PAGES_DIR = Path(__file__).parents[3] / "frontend" / "app_pages"
 
 def label_atuacao(row: pd.Series) -> str:
     fim = row["data_fim"] if row["data_fim"] is not None else "atual"
-    return f"{row['nome']} (id {row['id']}, {row['data_inicio']} → {fim})"
+    crm = f" · CRM {row['crm']}" if row.get("crm") else ""
+    return f"{row['nome']}{crm} · {row['data_inicio']} → {fim}"
 
 
 def formatar_inteiro(valor: object) -> str:
@@ -137,7 +138,9 @@ def pagina_atendimentos_paciente() -> None:
         paciente = st.selectbox(
             "Paciente",
             pacientes.itertuples(),
-            format_func=lambda r: f"{r.nome} (id {r.id})",
+            format_func=lambda r: (
+                f"{r.nome} — convênio {r.num_convenio or 'não informado'}"
+            ),
         )
 
     with st.spinner("Buscando atendimentos...", show_time=True):
@@ -169,7 +172,14 @@ def pagina_atendimentos_paciente() -> None:
     )
     st.subheader("Histórico")
     st.dataframe(
-        df,
+        df[[
+            "id_atendimento",
+            "data_hora",
+            "duracao_minutos",
+            "residente",
+            "preceptor",
+            "unidade",
+        ]],
         hide_index=True,
         width="stretch",
         column_config={
@@ -180,13 +190,9 @@ def pagina_atendimentos_paciente() -> None:
             "duracao_minutos": st.column_config.NumberColumn(
                 "Duração", format="%d min"
             ),
-            "id_atuacao_residente": st.column_config.NumberColumn(
-                "Atuação residente", format="%d"
-            ),
-            "id_atuacao_preceptor": st.column_config.NumberColumn(
-                "Atuação preceptora", format="%d"
-            ),
-            "id_unidade": st.column_config.NumberColumn("Unidade", format="%d"),
+            "residente": st.column_config.TextColumn("Residente"),
+            "preceptor": st.column_config.TextColumn("Preceptor"),
+            "unidade": st.column_config.TextColumn("Unidade"),
         },
     )
 
@@ -242,7 +248,8 @@ def pagina_procedimentos_atendimento() -> None:
         hide_index=True,
         width="stretch",
         column_config={
-            "id_procedimento": st.column_config.NumberColumn("ID", format="%d"),
+            "id_procedimento": None,
+            "codigo": st.column_config.NumberColumn("Código", format="%d"),
             "nome": st.column_config.TextColumn("Procedimento"),
             "quantidade": st.column_config.NumberColumn("Quantidade", format="%d"),
             "tempo_real_minutos": st.column_config.NumberColumn(
@@ -472,9 +479,7 @@ def pagina_tempo_medio_residente() -> None:
                 hide_index=True,
                 width="stretch",
                 column_config={
-                    "id_atuacao_residente": st.column_config.NumberColumn(
-                        "Atuação", format="%d"
-                    ),
+                    "id_atuacao_residente": None,
                     "nome_profissional": st.column_config.TextColumn("Residente"),
                     "tempo_medio_minutos": st.column_config.NumberColumn(
                         "Tempo médio", format="%.1f min"

@@ -91,6 +91,9 @@ def test_falha_reverte_operacoes_da_mesma_transacao(orm_session_factory: session
 def test_listar_atendimentos_paciente_em_ordem(orm_session: Session) -> None:
     resultados = listar_atendimentos_paciente(orm_session, 1)
     assert [resultado.id_atendimento for resultado in resultados] == [1, 6]
+    assert all(resultado.residente for resultado in resultados)
+    assert all(resultado.preceptor for resultado in resultados)
+    assert all(resultado.unidade for resultado in resultados)
 
 
 def test_listar_atendimentos_distingue_vazio_de_inexistente(orm_session: Session) -> None:

@@ -1,6 +1,6 @@
 # Matriz de conformidade — Etapa 2
 
-Última validação: 2 de agosto de 2026. A suíte completa terminou com **104 testes
+Última validação: 2 de agosto de 2026. A suíte completa terminou com **115 testes
 aprovados e nenhuma falha**. Todos os requisitos aplicáveis estão concluídos.
 
 | Grupo | Requisito | Implementação | Evidência de teste | Resultado |
@@ -20,3 +20,6 @@ aprovados e nenhuma falha**. Todos os requisitos aplicáveis estão concluídos.
 | 6 | Duas sessões e lock pessimista | `services/concorrencia.py` | `tests/test_aceitacao_etapa2.py` | **Aprovado** |
 | 7 | README, relatório e matriz | `README.md`, `docs/` | grupo 7 da suíte de aceitação | **Aprovado** |
 | Extra | Front final da Etapa 2 | `frontend/` e `ui/stage2.py` | `tests/test_app.py` | **Aprovado** |
+| Extra | Seleções explícitas e grade completa | `ui/stage2.py` | `tests/test_app.py` | **Aprovado** |
+| Extra | Antiduplicidade, autosupervisão e janela temporal | `sql/05_procedures.sql`, `services/rotinas.py` | `tests/test_procedures.py`, `tests/test_services_front_etapa2.py` | **Aprovado** |
+| Extra | Histórico sem IDs técnicos | `services/operacoes.py`, `ui/pages.py` | `tests/test_app.py`, `tests/test_orm_operacoes.py` | **Aprovado** |

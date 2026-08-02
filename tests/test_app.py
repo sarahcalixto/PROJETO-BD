@@ -42,8 +42,8 @@ def render_historico() -> None:
         [{"id": 1, "nome": "Ana", "num_convenio": "C-1", "grupo_sanguineo": "A+"}]
     )
     pages.executar_leitura = lambda *args, **kwargs: [
-        SimpleNamespace(id_atendimento=1, data_hora=datetime(2026, 7, 25, 9), duracao_minutos=30, id_paciente=1, id_atuacao_residente=2, id_atuacao_preceptor=3, id_unidade=4),
-        SimpleNamespace(id_atendimento=2, data_hora=datetime(2026, 7, 25, 10), duracao_minutos=60, id_paciente=1, id_atuacao_residente=2, id_atuacao_preceptor=3, id_unidade=4),
+        SimpleNamespace(id_atendimento=1, data_hora=datetime(2026, 7, 25, 9), duracao_minutos=30, residente="Rita", preceptor="Paulo", unidade="UTI"),
+        SimpleNamespace(id_atendimento=2, data_hora=datetime(2026, 7, 25, 10), duracao_minutos=60, residente="Rita", preceptor="Paulo", unidade="UTI"),
     ]
     pages.dto_dataframe = lambda items: pd.DataFrame([vars(item) for item in items])
     pages.pagina_atendimentos_paciente()
@@ -71,17 +71,67 @@ def render_atendimento_completo() -> None:
     stage2.listar_pacientes = lambda: pd.DataFrame(
         [{"id": 1, "nome": "Ana", "num_convenio": "C-1", "grupo_sanguineo": "A+"}]
     )
-    stage2.listar_atuacoes = lambda tipo: pd.DataFrame(
+    stage2.listar_atuacoes = lambda tipo, data_referencia=None: pd.DataFrame(
         [{
             "id": 1 if tipo == "residente" else 6,
             "nome": tipo.title(),
+            "crm": "CRM-1" if tipo == "residente" else "CRM-6",
             "data_inicio": date(2020, 1, 1),
             "data_fim": None,
         }]
     )
     stage2.listar_unidades = lambda: pd.DataFrame([{"id": 1, "nome": "UTI", "tipo": "uti"}])
-    stage2.listar_procedimentos_catalogo = lambda: pd.DataFrame([{"id": 1, "nome": "Sutura", "nivel_risco": "baixo", "tempo_medio_minutos": 20}])
-    stage2.executar_escrita = lambda *args, **kwargs: 42
+    stage2.listar_procedimentos_catalogo = lambda: pd.DataFrame([{"id": 1, "codigo": 1001, "nome": "Sutura", "nivel_risco": "baixo", "tempo_medio_minutos": 20}])
+    st = __import__("streamlit")
+    st.session_state.setdefault("registros_atendimento", 0)
+
+    def registrar(*args, **kwargs):
+        del args, kwargs
+        st.session_state["registros_atendimento"] += 1
+        return 42
+
+    stage2.executar_escrita = registrar
+    stage2.pagina_atendimento_completo()
+
+
+def render_atendimento_completo_valido() -> None:
+    from datetime import date, datetime, timedelta
+
+    import pandas as pd
+    import streamlit as st
+
+    from projeto_hospital.ui import stage2
+
+    stage2.listar_pacientes = lambda: pd.DataFrame(
+        [{"id": 1, "nome": "Ana", "num_convenio": "C-1", "grupo_sanguineo": "A+"}]
+    )
+    stage2.listar_atuacoes = lambda tipo, data_referencia=None: pd.DataFrame(
+        [{
+            "id": 1 if tipo == "residente" else 6,
+            "nome": tipo.title(),
+            "crm": "CRM-1" if tipo == "residente" else "CRM-6",
+            "data_inicio": date(2020, 1, 1),
+            "data_fim": None,
+        }]
+    )
+    stage2.listar_unidades = lambda: pd.DataFrame([{"id": 1, "nome": "UTI", "tipo": "uti"}])
+    stage2.listar_procedimentos_catalogo = lambda: pd.DataFrame([{"id": 1, "codigo": 1001, "nome": "Sutura", "nivel_risco": "baixo", "tempo_medio_minutos": 20}])
+    inicio = datetime.now().replace(second=0, microsecond=0) + timedelta(minutes=5)
+    stage2._editor_procedimentos = lambda catalogo: pd.DataFrame([{
+        "Procedimento": "1001 — Sutura",
+        "Quantidade": 1,
+        "Tempo real (min)": 20,
+        "Início": inicio,
+        "Observação": None,
+    }])
+    st.session_state.setdefault("entrada_atendimento", None)
+
+    def registrar(servico, entrada):
+        del servico
+        st.session_state["entrada_atendimento"] = entrada
+        return 42
+
+    stage2.executar_escrita = registrar
     stage2.pagina_atendimento_completo()
 
 
@@ -200,6 +250,14 @@ def test_historico_usa_resultados_orm() -> None:
     app = AppTest.from_function(render_historico).run()
     assert not app.exception
     assert [item.value for item in app.metric] == ["2", "90 min", "45.0 min"]
+    colunas = set(app.dataframe[0].value.columns)
+    assert {"residente", "preceptor", "unidade"} <= colunas
+    assert not colunas & {
+        "id_paciente",
+        "id_atuacao_residente",
+        "id_atuacao_preceptor",
+        "id_unidade",
+    }
 
 
 def test_navegacao_abre_visao_geral_e_inclui_etapa2() -> None:
@@ -209,13 +267,53 @@ def test_navegacao_abre_visao_geral_e_inclui_etapa2() -> None:
     assert [item.value for item in app.metric] == ["0", "0", "0", "0"]
 
 
-def test_atendimento_completo_exibe_editor_e_registra() -> None:
+def test_atendimento_completo_exige_escolhas_e_procedimento() -> None:
     app = AppTest.from_function(render_atendimento_completo).run()
     assert not app.exception
     botao = next(item for item in app.button if item.label == "Registrar atendimento completo")
     app = botao.click().run()
     assert not app.exception
+    assert app.session_state["registros_atendimento"] == 0
+    assert any("Selecione" in item.value for item in app.error)
+
+
+def test_atendimento_completo_registra_entrada_revisada() -> None:
+    app = AppTest.from_function(render_atendimento_completo_valido).run()
+    app.number_input[0].set_value(30)
+    for seletor, valor in zip(app.selectbox, (1, 1, 6, 1), strict=True):
+        seletor.select(valor)
+    botao = next(item for item in app.button if item.label == "Registrar atendimento completo")
+    app = botao.click().run()
+    assert not app.exception
+    assert app.session_state["entrada_atendimento"].procedimentos[0].observacao is None
     assert any("Atendimento 42" in item.value for item in app.success)
+
+
+def test_validacao_da_grade_rejeita_linha_parcial_e_normaliza_observacao() -> None:
+    from datetime import datetime
+
+    import pytest
+
+    from projeto_hospital.services import RegraNegocioViolada
+    from projeto_hospital.ui.stage2 import _preparar_procedimentos
+
+    catalogo = pd.DataFrame([{"id": 1, "codigo": 1001, "nome": "Sutura", "nivel_risco": "baixo", "tempo_medio_minutos": 20}])
+    atendimento = datetime(2026, 8, 2, 9)
+    parcial = pd.DataFrame([{
+        "Procedimento": "1001 — Sutura",
+        "Quantidade": 1,
+        "Tempo real (min)": None,
+        "Início": None,
+        "Observação": None,
+    }])
+    with pytest.raises(RegraNegocioViolada, match="linha 1"):
+        _preparar_procedimentos(parcial, catalogo, atendimento, 30)
+
+    completa = parcial.copy()
+    completa.loc[0, "Tempo real (min)"] = 20
+    completa.loc[0, "Início"] = datetime(2026, 8, 2, 9, 5)
+    itens = _preparar_procedimentos(completa, catalogo, atendimento, 30)
+    assert itens[0].observacao is None
 
 
 def test_reajuste_exige_confirmacao_e_confirma_transacao() -> None:
