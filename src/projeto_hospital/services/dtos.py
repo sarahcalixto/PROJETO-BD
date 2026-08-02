@@ -72,3 +72,36 @@ class PlantoesUnidadeDTO:
 class PacienteSemAltoRiscoDTO:
     nome: str
     num_convenio: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class PreceptorFlamenguistaDTO:
+    id_atuacao_preceptor: int
+    nome: str
+
+
+@dataclass(frozen=True, slots=True)
+class ProcedimentoResumoDTO:
+    id_procedimento: int
+    nome: str
+    quantidade: int
+
+
+@dataclass(frozen=True, slots=True)
+class UltimoAtendimentoPacienteDTO:
+    id_paciente: int
+    paciente: str
+    id_atendimento: int | None
+    data_hora: datetime | None
+    residente: str | None
+    preceptor: str | None
+    procedimentos: tuple[ProcedimentoResumoDTO, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PercentualAltoRiscoResidenteDTO:
+    id_atuacao_residente: int
+    residente: str
+    total_procedimentos: int
+    procedimentos_alto_risco: int
+    percentual_alto_risco: Decimal

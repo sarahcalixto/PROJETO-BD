@@ -4,14 +4,21 @@
 
 -- view vw_pacientes_internados: pacientes que estão atualmente internados --
 CREATE OR REPLACE VIEW vw_pacientes_internados AS
-SELECT 
+WITH ultimas_internacoes AS (
+    SELECT DISTINCT ON (i.id_paciente)
+        i.id_paciente,
+        i.data_hora_entrada,
+        i.data_hora_saida
+    FROM internacao i
+    ORDER BY i.id_paciente, i.data_hora_entrada DESC, i.id DESC
+)
+SELECT
     pes.nome AS paciente,
     pac.num_convenio,
     i.data_hora_entrada AS data_internacao
-FROM internacao i 
+FROM ultimas_internacoes i
 JOIN paciente pac ON i.id_paciente = pac.id
-JOIN pessoa pes ON pac.id = pes.id 
--- como foi criado um índice no schema, basta adicionar esse filtro:
+JOIN pessoa pes ON pac.id = pes.id
 WHERE i.data_hora_saida IS NULL;
 
 -- view vw_residentes_sem_supervisor -- 
@@ -31,7 +38,12 @@ JOIN pessoa pres ON aprof_res.id_profissional = pres.id
 JOIN atuacao_preceptor aprec ON e.id_atuacao_preceptor = aprec.id
 JOIN atuacao_profissional aprof_prec ON aprec.id = aprof_prec.id
 JOIN pessoa pprec ON aprof_prec.id_profissional = pprec.id
-WHERE LOWER(aprec.titulacao) <> 'doutor'; -- verifica se a titulação é diferente de doutor
+WHERE LOWER(aprec.titulacao) <> 'doutor'
+   OR aprof_prec.data_inicio > e.data_plantao
+   OR (
+       aprof_prec.data_fim IS NOT NULL
+       AND aprof_prec.data_fim < e.data_plantao
+   );
 
 -- view vw_estatisticas_atendimentos_mensal --
 -- agregação por mês e por unidade: total
@@ -101,6 +113,4 @@ LEFT JOIN RankingProcedimentos rp
    AND eg.mes = rp.mes 
    AND eg.id_unidade = rp.id_unidade 
    AND rp.rn = 1;
-
-
 

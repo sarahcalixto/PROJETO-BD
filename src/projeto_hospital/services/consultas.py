@@ -154,7 +154,7 @@ def pacientes_sem_procedimento_alto_risco(session: Session) -> list[PacienteSemA
         .where(~realizou_alto_risco)
         .order_by(Pessoa.nome.asc())
     )
-    
+
     return [
         PacienteSemAltoRiscoDTO(nome, num_convenio)
         for nome, num_convenio in session.execute(statement)
