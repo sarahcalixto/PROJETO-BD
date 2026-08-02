@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 
@@ -105,3 +105,49 @@ class PercentualAltoRiscoResidenteDTO:
     total_procedimentos: int
     procedimentos_alto_risco: int
     percentual_alto_risco: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class ProcedimentoCompletoInput:
+    id_procedimento: int
+    quantidade: int
+    tempo_real_minutos: int
+    data_hora_inicio: datetime
+    observacao: str | None = None
+    faturado: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class AtendimentoCompletoInput:
+    data_hora: datetime
+    duracao_minutos: int
+    id_paciente: int
+    id_atuacao_residente: int
+    id_atuacao_preceptor: int
+    id_unidade: int
+    procedimentos: tuple[ProcedimentoCompletoInput, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TempoEsperaUnidadeDTO:
+    id_unidade: int
+    unidade: str
+    tempo_medio_espera_minutos: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class ReajusteEscalaDTO:
+    id_atuacao_residente: int
+    data_origem: date
+    turno_origem: str
+    data_destino: date
+    turno_destino: str
+    quantidade_atualizada: int
+
+
+@dataclass(frozen=True, slots=True)
+class MedicaoCarregamentoDTO:
+    id_paciente: int
+    consultas_lazy: int
+    consultas_eager: int
+    atendimentos_carregados: int

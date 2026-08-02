@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from queue import Queue
 from threading import Event, Thread
 
@@ -12,7 +12,13 @@ from sqlalchemy import cast, delete, func, literal, select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session, sessionmaker
 
-from projeto_hospital.orm import Escala
+from projeto_hospital.orm import (
+    AtuacaoPreceptor,
+    AtuacaoProfissional,
+    AtuacaoResidente,
+    Escala,
+    Unidade,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -29,13 +35,14 @@ class ResultadoConcorrencia:
 
 def _reajustar(
     session: Session,
+    id_residente: int,
     origem: date,
     destino: date,
 ) -> int:
     return session.scalar(
         select(
             func.sp_reajustar_escala(
-                1,
+                id_residente,
                 origem,
                 cast(literal("manha"), Escala.turno.type),
                 destino,
@@ -50,31 +57,65 @@ def demonstrar_concorrencia_escala(
 ) -> ResultadoConcorrencia:
     """Executa duas transações, prova a espera e verifica o estado final."""
 
-    origem_1 = date(2031, 6, 1)
-    origem_2 = date(2031, 6, 2)
-    destino = date(2031, 6, 3)
+    referencia = date.today() + timedelta(days=365)
+    origem_1 = referencia
+    origem_2 = referencia + timedelta(days=1)
+    destino = referencia + timedelta(days=2)
     datas = (origem_1, origem_2, destino)
+
+    with factory() as descoberta:
+        id_residente = descoberta.scalar(
+            select(AtuacaoResidente.id)
+            .join(AtuacaoProfissional)
+            .where(
+                AtuacaoProfissional.data_inicio <= destino,
+                (
+                    AtuacaoProfissional.data_fim.is_(None)
+                    | (AtuacaoProfissional.data_fim >= destino)
+                ),
+            )
+            .order_by(AtuacaoResidente.id)
+            .limit(1)
+        )
+        id_preceptor = descoberta.scalar(
+            select(AtuacaoPreceptor.id)
+            .join(AtuacaoProfissional)
+            .where(
+                AtuacaoProfissional.data_inicio <= destino,
+                (
+                    AtuacaoProfissional.data_fim.is_(None)
+                    | (AtuacaoProfissional.data_fim >= destino)
+                ),
+            )
+            .order_by(AtuacaoPreceptor.id)
+            .limit(1)
+        )
+        unidades = descoberta.scalars(
+            select(Unidade.id).order_by(Unidade.id).limit(2)
+        ).all()
+    if id_residente is None or id_preceptor is None or len(unidades) < 2:
+        raise RuntimeError("Não há residente, preceptor e duas unidades vigentes")
 
     with factory.begin() as setup:
         setup.execute(
             delete(Escala).where(
-                Escala.id_atuacao_residente == 1,
+                Escala.id_atuacao_residente == id_residente,
                 Escala.data_plantao.in_(datas),
             )
         )
         primeira = Escala(
-            id_unidade=1,
+            id_unidade=unidades[0],
             data_plantao=origem_1,
             turno="manha",
-            id_atuacao_residente=1,
-            id_atuacao_preceptor=6,
+            id_atuacao_residente=id_residente,
+            id_atuacao_preceptor=id_preceptor,
         )
         segunda = Escala(
-            id_unidade=2,
+            id_unidade=unidades[1],
             data_plantao=origem_2,
             turno="manha",
-            id_atuacao_residente=1,
-            id_atuacao_preceptor=6,
+            id_atuacao_residente=id_residente,
+            id_atuacao_preceptor=id_preceptor,
         )
         setup.add_all((primeira, segunda))
 
@@ -92,7 +133,7 @@ def demonstrar_concorrencia_escala(
     def transacao_1() -> None:
         try:
             with factory() as session:
-                _reajustar(session, origem_1, destino)
+                _reajustar(session, id_residente, origem_1, destino)
                 registrar("T1 atualizou e manteve o lock pessimista")
                 primeira_atualizou.set()
                 if not liberar_commit.wait(10):
@@ -113,7 +154,7 @@ def demonstrar_concorrencia_escala(
             with factory() as session:
                 segunda_iniciou.set()
                 registrar("T2 iniciou o reajuste conflitante")
-                _reajustar(session, origem_2, destino)
+                _reajustar(session, id_residente, origem_2, destino)
                 session.commit()
                 resultados.put(("T2", "confirmada"))
         except DBAPIError as error:
@@ -145,7 +186,7 @@ def demonstrar_concorrencia_escala(
     with factory() as verificacao:
         quantidade_destino = verificacao.scalar(
             select(func.count(Escala.id)).where(
-                Escala.id_atuacao_residente == 1,
+                Escala.id_atuacao_residente == id_residente,
                 Escala.data_plantao == destino,
                 Escala.turno == "tarde",
             )
@@ -153,7 +194,7 @@ def demonstrar_concorrencia_escala(
     with factory.begin() as limpeza:
         limpeza.execute(
             delete(Escala).where(
-                Escala.id_atuacao_residente == 1,
+                Escala.id_atuacao_residente == id_residente,
                 Escala.data_plantao.in_(datas),
             )
         )
