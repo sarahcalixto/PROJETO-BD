@@ -253,3 +253,41 @@ BEGIN
     RETURN v_id_atendimento;
 END;
 $$;
+
+-- calcula, para cada unidade com atendimentos elegiveis, a media em minutos
+-- entre a chegada do paciente e o inicio do primeiro procedimento realizado
+CREATE OR REPLACE FUNCTION sp_calcular_tempo_medio_espera()
+RETURNS TABLE (
+    id_unidade unidade.id%TYPE,
+    unidade unidade.nome%TYPE,
+    tempo_medio_espera_minutos numeric
+)
+LANGUAGE sql
+STABLE
+AS $$
+    WITH primeiro_procedimento AS (
+        SELECT
+            pr.id_atendimento,
+            MIN(pr.data_hora_inicio) AS data_hora_inicio
+        FROM procedimento_realizado AS pr
+        GROUP BY pr.id_atendimento
+    )
+    SELECT
+        u.id,
+        u.nome,
+        ROUND(
+            AVG(
+                EXTRACT(
+                    EPOCH FROM (pp.data_hora_inicio - a.data_hora)
+                ) / 60
+            ),
+            2
+        ) AS tempo_medio_espera_minutos
+    FROM atendimento AS a
+    JOIN primeiro_procedimento AS pp
+      ON pp.id_atendimento = a.id
+    JOIN unidade AS u
+      ON u.id = a.id_unidade
+    GROUP BY u.id, u.nome
+    ORDER BY u.id;
+$$;
