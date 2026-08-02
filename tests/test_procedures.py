@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 import psycopg
 import pytest
@@ -289,7 +289,284 @@ def test_tempo_medio_espera_usa_primeiro_procedimento_e_ignora_sem_procedimento(
         resultados = {row[0]: row[1:] for row in cur.fetchall()}
 
     assert resultados[id_unidade] == (
-        "unidade teste da media",
+        "Unidade teste da media",
         Decimal("15.00"),
     )
     assert id_unidade_sem_procedimento not in resultados
+
+
+def inserir_escala(
+    conn: psycopg.Connection,
+    *,
+    residente: int = 1,
+    unidade: int = 1,
+    data_plantao: date,
+    turno: str,
+    preceptor: int = 6,
+) -> int:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO escala (
+                id_unidade, data_plantao, turno,
+                id_atuacao_residente, id_atuacao_preceptor
+            ) VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (unidade, data_plantao, turno, residente, preceptor),
+        )
+        row = cur.fetchone()
+
+    assert row is not None
+    return row[0]
+
+
+def reajustar_escala(
+    conn: psycopg.Connection,
+    *,
+    residente: int = 1,
+    data_origem: date,
+    turno_origem: str,
+    data_destino: date,
+    turno_destino: str,
+) -> int:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT sp_reajustar_escala(%s, %s, %s, %s, %s)
+            """,
+            (
+                residente,
+                data_origem,
+                turno_origem,
+                data_destino,
+                turno_destino,
+            ),
+        )
+        row = cur.fetchone()
+
+    assert row is not None
+    return row[0]
+
+
+def test_reajustar_escala_move_origem_e_preserva_demais_escalas(
+    conn: psycopg.Connection,
+) -> None:
+    data_origem = date(2027, 1, 10)
+    data_destino = date(2027, 1, 12)
+    id_movido = inserir_escala(
+        conn,
+        data_plantao=data_origem,
+        turno="manha",
+    )
+    id_preservado = inserir_escala(
+        conn,
+        data_plantao=date(2027, 1, 11),
+        turno="tarde",
+    )
+
+    quantidade = reajustar_escala(
+        conn,
+        data_origem=data_origem,
+        turno_origem="manha",
+        data_destino=data_destino,
+        turno_destino="noite",
+    )
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, data_plantao, turno::text
+            FROM escala
+            WHERE id IN (%s, %s)
+            ORDER BY id
+            """,
+            (id_movido, id_preservado),
+        )
+        escalas = {row[0]: row[1:] for row in cur.fetchall()}
+
+    assert quantidade == 1
+    assert escalas[id_movido] == (data_destino, "noite")
+    assert escalas[id_preservado] == (date(2027, 1, 11), "tarde")
+
+
+def test_reajustar_multiplas_escalas_na_mesma_transacao(
+    conn: psycopg.Connection,
+) -> None:
+    data_origem = date(2027, 1, 20)
+    data_destino = date(2027, 1, 21)
+    inserir_escala(
+        conn,
+        residente=1,
+        unidade=1,
+        data_plantao=data_origem,
+        turno="manha",
+        preceptor=6,
+    )
+    inserir_escala(
+        conn,
+        residente=2,
+        unidade=2,
+        data_plantao=data_origem,
+        turno="manha",
+        preceptor=7,
+    )
+
+    quantidades = [
+        reajustar_escala(
+            conn,
+            residente=residente,
+            data_origem=data_origem,
+            turno_origem="manha",
+            data_destino=data_destino,
+            turno_destino="tarde",
+        )
+        for residente in (1, 2)
+    ]
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id_atuacao_residente
+            FROM escala
+            WHERE id_atuacao_residente IN (1, 2)
+              AND data_plantao = %s
+              AND turno = 'tarde'
+            ORDER BY id_atuacao_residente
+            """,
+            (data_destino,),
+        )
+        residentes_reajustados = [row[0] for row in cur.fetchall()]
+
+    assert quantidades == [1, 1]
+    assert residentes_reajustados == [1, 2]
+
+
+def test_reajustar_escala_rejeita_residente_inexistente(
+    conn: psycopg.Connection,
+) -> None:
+    with pytest.raises(psycopg.errors.ForeignKeyViolation):
+        reajustar_escala(
+            conn,
+            residente=999_999,
+            data_origem=date(2027, 2, 1),
+            turno_origem="manha",
+            data_destino=date(2027, 2, 2),
+            turno_destino="tarde",
+        )
+
+
+def test_reajustar_escala_rejeita_origem_sem_escalas(
+    conn: psycopg.Connection,
+) -> None:
+    with pytest.raises(psycopg.errors.NoDataFound):
+        reajustar_escala(
+            conn,
+            data_origem=date(2027, 2, 1),
+            turno_origem="manha",
+            data_destino=date(2027, 2, 2),
+            turno_destino="tarde",
+        )
+
+
+def test_reajustar_escala_rejeita_origem_igual_ao_destino(
+    conn: psycopg.Connection,
+) -> None:
+    data_plantao = date(2027, 3, 1)
+    inserir_escala(
+        conn,
+        data_plantao=data_plantao,
+        turno="manha",
+    )
+
+    with pytest.raises(psycopg.errors.CheckViolation):
+        reajustar_escala(
+            conn,
+            data_origem=data_plantao,
+            turno_origem="manha",
+            data_destino=data_plantao,
+            turno_destino="manha",
+        )
+
+
+@pytest.mark.parametrize("id_atuacao", [1, 6], ids=["residente", "preceptor"])
+def test_reajustar_escala_rejeita_atuacao_fora_da_vigencia_no_destino(
+    conn: psycopg.Connection,
+    id_atuacao: int,
+) -> None:
+    data_origem = date(2027, 4, 1)
+    data_destino = date(2027, 4, 3)
+    id_escala = inserir_escala(
+        conn,
+        data_plantao=data_origem,
+        turno="manha",
+    )
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE atuacao_profissional SET data_fim = %s WHERE id = %s",
+            (date(2027, 4, 2), id_atuacao),
+        )
+        cur.execute("SAVEPOINT antes_do_reajuste")
+
+    with pytest.raises(psycopg.errors.CheckViolation):
+        reajustar_escala(
+            conn,
+            data_origem=data_origem,
+            turno_origem="manha",
+            data_destino=data_destino,
+            turno_destino="tarde",
+        )
+
+    with conn.cursor() as cur:
+        cur.execute("ROLLBACK TO SAVEPOINT antes_do_reajuste")
+        cur.execute(
+            "SELECT data_plantao, turno::text FROM escala WHERE id = %s",
+            (id_escala,),
+        )
+        assert cur.fetchone() == (data_origem, "manha")
+
+
+def test_conflito_no_destino_nao_atualiza_escala_de_origem(
+    conn: psycopg.Connection,
+) -> None:
+    data_origem = date(2027, 5, 1)
+    data_destino = date(2027, 5, 2)
+    id_origem = inserir_escala(
+        conn,
+        unidade=1,
+        data_plantao=data_origem,
+        turno="manha",
+    )
+    id_destino = inserir_escala(
+        conn,
+        unidade=2,
+        data_plantao=data_destino,
+        turno="tarde",
+    )
+    with conn.cursor() as cur:
+        cur.execute("SAVEPOINT antes_do_reajuste")
+
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        reajustar_escala(
+            conn,
+            data_origem=data_origem,
+            turno_origem="manha",
+            data_destino=data_destino,
+            turno_destino="tarde",
+        )
+
+    with conn.cursor() as cur:
+        cur.execute("ROLLBACK TO SAVEPOINT antes_do_reajuste")
+        cur.execute(
+            """
+            SELECT id, id_unidade, data_plantao, turno::text
+            FROM escala
+            WHERE id IN (%s, %s)
+            ORDER BY id
+            """,
+            (id_origem, id_destino),
+        )
+        assert cur.fetchall() == [
+            (id_origem, 1, data_origem, "manha"),
+            (id_destino, 2, data_destino, "tarde"),
+        ]
