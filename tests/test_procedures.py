@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 import psycopg
 import pytest
 from psycopg.types.json import Jsonb
@@ -217,3 +218,78 @@ def test_registrar_atendimento_rejeita_procedimento_antes_do_atendimento(
 
     with pytest.raises(psycopg.errors.CheckViolation):
         registrar_atendimento(conn, [procedimento])
+
+
+def test_tempo_medio_espera_usa_primeiro_procedimento_e_ignora_sem_procedimento(
+    conn: psycopg.Connection,
+) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO unidade (nome, tipo, capacidade_leitos)
+            VALUES ('Unidade teste da media', 'ambulatorio', 10)
+            RETURNING id
+            """
+        )
+        id_unidade = cur.fetchone()[0]
+
+        cur.execute(
+            """
+            INSERT INTO unidade (nome, tipo, capacidade_leitos)
+            VALUES ('Unidade sem procedimento', 'ambulatorio', 10)
+            RETURNING id
+            """
+        )
+        id_unidade_sem_procedimento = cur.fetchone()[0]
+
+        cur.execute(
+            """
+            INSERT INTO atendimento (
+                data_hora, duracao_minutos, id_paciente,
+                id_atuacao_residente, id_atuacao_preceptor, id_unidade
+            ) VALUES
+                ('2026-09-01 10:00:00', 60, 1, 1, 6, %s),
+                ('2026-09-01 11:00:00', 30, 2, 1, 6, %s),
+                ('2026-09-01 12:00:00', 20, 3, 1, 6, %s),
+                ('2026-09-01 13:00:00', 20, 4, 1, 6, %s)
+            RETURNING id
+            """,
+            (
+                id_unidade,
+                id_unidade,
+                id_unidade,
+                id_unidade_sem_procedimento,
+            ),
+        )
+        ids_atendimentos = [row[0] for row in cur.fetchall()]
+
+        cur.execute(
+            """
+            INSERT INTO procedimento_realizado (
+                id_atendimento, id_procedimento, quantidade,
+                tempo_real_minutos, data_hora_inicio
+            ) VALUES
+                (%s, 1, 1, 20, '2026-09-01 10:50:00'),
+                (%s, 2, 1, 20, '2026-09-01 10:20:00'),
+                (%s, 1, 1, 10, '2026-09-01 11:10:00')
+            """,
+            (
+                ids_atendimentos[0],
+                ids_atendimentos[0],
+                ids_atendimentos[1],
+            ),
+        )
+
+        cur.execute(
+            """
+            SELECT id_unidade, unidade, tempo_medio_espera_minutos
+            FROM sp_calcular_tempo_medio_espera()
+            """
+        )
+        resultados = {row[0]: row[1:] for row in cur.fetchall()}
+
+    assert resultados[id_unidade] == (
+        "unidade teste da media",
+        Decimal("15.00"),
+    )
+    assert id_unidade_sem_procedimento not in resultados
