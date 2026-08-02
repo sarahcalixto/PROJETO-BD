@@ -93,7 +93,6 @@ views `07` e os dados demonstrativos `09`.
 - [Requisitos da Etapa 2](docs/requisitos/requisitos_etapa_2.md)
 - [Relatório técnico](docs/relatorio_etapa2.md)
 - [Matriz de conformidade](docs/matriz_conformidade_etapa2.md)
-- [Roteiro do vídeo](docs/roteiro_video_etapa2.md)
 - [Modelo e normalização](docs/modelagem/README.md)
 
 ## Demonstração concorrente pelo terminal

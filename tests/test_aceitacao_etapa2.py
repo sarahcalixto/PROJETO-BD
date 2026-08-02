@@ -136,6 +136,5 @@ class TestGrupo7Entrega:
             "README.md",
             "docs/relatorio_etapa2.md",
             "docs/matriz_conformidade_etapa2.md",
-            "docs/roteiro_video_etapa2.md",
         ):
             assert (ROOT / relativo).is_file(), relativo

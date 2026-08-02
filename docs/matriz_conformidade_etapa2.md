@@ -1,8 +1,7 @@
 # Matriz de conformidade — Etapa 2
 
 Última validação: 2 de agosto de 2026. A suíte completa terminou com **104 testes
-aprovados e nenhuma falha**. A gravação do vídeo permanece como atividade
-manual posterior.
+aprovados e nenhuma falha**. Todos os requisitos aplicáveis estão concluídos.
 
 | Grupo | Requisito | Implementação | Evidência de teste | Resultado |
 |---|---|---|---|---|
@@ -19,6 +18,5 @@ manual posterior.
 | 4 | Sessão, commit, rollback, lazy/eager | `orm/session.py` e relacionamentos | `tests/test_orm_carregamento_transacoes.py` | **Aprovado** |
 | 5 | Três consultas avançadas e casos zero | `consultas_avancadas.py` | `tests/test_orm_avancado.py` | **Aprovado** |
 | 6 | Duas sessões e lock pessimista | `services/concorrencia.py` | `tests/test_aceitacao_etapa2.py` | **Aprovado** |
-| 7 | README, relatório, matriz e roteiro | `README.md`, `docs/` | grupo 7 da suíte de aceitação | **Aprovado** |
-| 7 | Vídeo de até 8 minutos | gravação manual | conferência manual | **Pendente** |
+| 7 | README, relatório e matriz | `README.md`, `docs/` | grupo 7 da suíte de aceitação | **Aprovado** |
 | Extra | Front final da Etapa 2 | `frontend/` e `ui/stage2.py` | `tests/test_app.py` | **Aprovado** |

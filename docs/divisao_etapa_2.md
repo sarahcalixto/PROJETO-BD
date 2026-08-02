@@ -40,7 +40,6 @@ Esta entrega já foi concluída na `main`.
 - Atualizar o README com instalação, execução, ordem dos scripts e demonstração.
 - Concluir o relatório, explicando procedures versus triggers, ORM e
   concorrência.
-- Preparar o roteiro e gravar o vídeo final de até oito minutos.
 - Criar a tag da entrega somente depois da validação completa.
 
 ## Ruan — procedures e concorrência

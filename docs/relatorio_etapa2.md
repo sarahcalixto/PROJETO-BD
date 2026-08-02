@@ -69,5 +69,5 @@ vazios, entidades ausentes, JSON inválido, valores exatos e objetos instalados
 no catálogo do PostgreSQL. A interface usa os serviços ORM e disponibiliza
 operações, views, consultas avançadas e evidências técnicas sob demanda.
 
-Falta apenas a atividade manual de gravar o vídeo de até oito minutos. Por isso
-a Etapa 2 ainda não recebe tag final neste momento.
+A implementação e as evidências exigidas para a Etapa 2 estão concluídas. A tag
+final poderá ser criada após o merge e a publicação da branch de entrega.

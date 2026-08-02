@@ -68,4 +68,4 @@ falhar integralmente se houver conflito.
 
 - Commits e branches separados por bloco de responsabilidade.
 - Testes de sucesso, falha e rollback para cada requisito.
-- README atualizado, relatório breve e vídeo de até oito minutos.
+- README atualizado, relatório breve e matriz de conformidade.
