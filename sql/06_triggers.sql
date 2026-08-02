@@ -31,6 +31,55 @@ CREATE TRIGGER trg_check_sobreposicao_escala
 BEFORE INSERT OR UPDATE ON escala
 FOR EACH ROW EXECUTE FUNCTION check_sobreposicao_escala(); -- trigger do tipo linha pois é preciso validar dados específicos 
 
+-- função do trigger trg_audita_atendimento --
+CREATE OR REPLACE FUNCTION audita_atendimento()
+RETURNS TRIGGER 
+AS $$
+DECLARE
+v_old JSONB := NULL; -- dados antigos
+v_new JSONB := NULL; -- dados novos
+v_id_atendimento INT; -- garantir que o ID seja adquirido corretamente
+
+BEGIN 
+    -- captura os estados da linha dependendo da operação
+    IF(TG_OP = 'DELETE') THEN
+        v_old := to_jsonb(OLD);
+        v_id_atendimento := OLD.id;
+    ELSIF(TG_OP = 'UPDATE') THEN
+        v_old := to_jsonb(OLD);
+        v_new := to_jsonb(NEW);
+        v_id_atendimento := NEW.id;
+    ELSIF (TG_OP = 'INSERT') THEN
+        v_new := to_jsonb(NEW);
+        v_id_atendimento := NEW.id;
+    END IF;
+
+    -- o campo data_hora foi omitido para apoveitar o DEFAULT do schema 
+    INSERT INTO auditoria_atendimento (
+        id_atendimento, operacao, usuario, dados_antigos, dados_novos
+    ) VALUES (
+        v_id_atendimento, TG_OP, current_user, v_old, v_new
+    );
+
+    IF (TG_OP = 'DELETE') THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_audita_atendimento ON atendimento;
+CREATE TRIGGER trg_audita_atendimento
+AFTER INSERT OR UPDATE OR DELETE ON atendimento
+-- se foi usado um trigger do tipo linha novamente pelos motivos de:
+-- acesso aos dados individuais que é necessário para estabelecer os dados antigos e o depois de cada linha
+-- caso alguém execute um comando para remover 50 atendimentos de uma vez com trigger de comando o histórico seria perdido
+
+FOR EACH ROW EXECUTE FUNCTION audita_atendimento();
+
+
+
+
 
 
 
