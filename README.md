@@ -51,7 +51,7 @@ uv run python scripts/check_environment.py
 Opção recomendada (não exige instalar PostgreSQL na máquina):
 
 ```bash
-docker compose up -d
+docker compose up -d --wait
 ```
 
 Isso sobe um PostgreSQL 16 em `localhost:5432` com usuário/senha `postgres`, já criando os bancos `projeto_hospital` e `projeto_hospital_teste` (este último usado pelos testes de integração).
@@ -71,14 +71,43 @@ sudo -iu postgres psql \
 ## Testes
 
 ```bash
+uv run pytest tests/test_app.py
+uv run pytest tests/test_procedures.py tests/test_triggers.py tests/test_views.py
+uv run pytest tests/test_orm_operacoes.py tests/test_orm_consultas.py tests/test_orm_avancado.py
+uv run pytest tests/test_aceitacao_etapa2.py
 uv run pytest
 ```
 
 Os testes de integração recriam o schema a partir de `sql/01_schema.sql`,
-carregam `sql/02_dados_teste.sql` e usam o banco `projeto_hospital_teste`.
+carregam, nesta ordem, `02_dados_teste.sql`, `05_procedures.sql`,
+`06_triggers.sql` e `07_views.sql`, e usam exclusivamente o banco
+`projeto_hospital_teste`.
 Eles são pulados automaticamente (`SKIPPED`) se esse banco não estiver
 acessível. As fixtures compartilhadas de psycopg e SQLAlchemy ficam em
 `tests/config.py`, registrado como plugin do pytest via `pyproject.toml`.
+
+### Demonstração concorrente
+
+Com o banco preparado pelos scripts, execute:
+
+```bash
+uv run python scripts/demonstrar_concorrencia.py
+```
+
+O programa abre duas sessões SQLAlchemy, faz as duas disputarem o lock do
+mesmo residente e encerra com código zero somente quando uma transação confirma,
+a outra é rejeitada e existe uma única escala no destino. Os logs mostram a
+espera pelo lock pessimista.
+
+### Ordem completa dos scripts SQL
+
+1. `01_schema.sql`: tipos, tabelas, constraints e índices;
+2. `02_dados_teste.sql`: massa mínima reproduzível;
+3. `03_crud_consultas.sql`: operações SQL puro preservadas da Etapa 1;
+4. `04_consultas_analiticas.sql`: consultas analíticas da Etapa 1;
+5. `05_procedures.sql`: rotinas armazenadas e controle transacional;
+6. `06_triggers.sql`: regras automáticas e auditoria;
+7. `07_views.sql`: visões da Etapa 2.
 
 ## Estrutura
 
@@ -102,16 +131,21 @@ acessível. As fixtures compartilhadas de psycopg e SQLAlchemy ficam em
 │   ├── app_pages/
 │   └── assets/
 ├── scripts/check_environment.py
+├── scripts/demonstrar_concorrencia.py
 ├── sql/
 │   ├── 01_schema.sql
 │   ├── 02_dados_teste.sql
 │   ├── 03_crud_consultas.sql
-│   └── 04_consultas_analiticas.sql
+│   ├── 04_consultas_analiticas.sql
+│   ├── 05_procedures.sql
+│   ├── 06_triggers.sql
+│   └── 07_views.sql
 ├── src/projeto_hospital/
 │   ├── orm/
 │   │   ├── base.py
 │   │   ├── models.py
 │   │   └── session.py
+│   ├── services/
 │   └── ui/
 ├── tests/
 │   ├── __init__.py
