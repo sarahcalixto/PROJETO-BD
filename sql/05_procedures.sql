@@ -291,3 +291,130 @@ AS $$
     GROUP BY u.id, u.nome
     ORDER BY u.id;
 $$;
+
+-- move as escalas de um residente de uma data/turno para outra data/turno
+CREATE OR REPLACE FUNCTION sp_reajustar_escala(
+    p_id_atuacao_residente escala.id_atuacao_residente%TYPE,
+    p_data_origem escala.data_plantao%TYPE,
+    p_turno_origem escala.turno%TYPE,
+    p_data_destino escala.data_plantao%TYPE,
+    p_turno_destino escala.turno%TYPE
+)
+RETURNS integer
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_quantidade_atualizada integer;
+BEGIN
+    IF p_id_atuacao_residente IS NULL
+       OR p_data_origem IS NULL
+       OR p_turno_origem IS NULL
+       OR p_data_destino IS NULL
+       OR p_turno_destino IS NULL THEN
+        RAISE EXCEPTION 'Os parametros do reajuste de escala sao obrigatorios.'
+            USING ERRCODE = 'not_null_violation';
+    END IF;
+
+    -- nao basta bloquear escalas existentes: o destino pode ainda estar vazio
+    -- toda operacao concorrente para o mesmo residente 
+    -- disputa esta mesma linha :/
+    PERFORM 1
+    FROM atuacao_residente
+    WHERE id = p_id_atuacao_residente
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION
+            'Atuacao residente nao encontrada: id=%',
+            p_id_atuacao_residente
+            USING ERRCODE = 'foreign_key_violation';
+    END IF;
+
+    IF p_data_origem = p_data_destino
+       AND p_turno_origem = p_turno_destino THEN
+        RAISE EXCEPTION 'Origem e destino da escala devem ser diferentes.'
+            USING ERRCODE = 'check_violation';
+    END IF;
+
+    -- bloqueia todas as linhas de origem depois da linha estavel
+    PERFORM 1
+    FROM escala AS e
+    WHERE e.id_atuacao_residente = p_id_atuacao_residente
+      AND e.data_plantao = p_data_origem
+      AND e.turno = p_turno_origem
+    ORDER BY e.id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION
+            'Nenhuma escala encontrada para o residente % em %/%.',
+            p_id_atuacao_residente,
+            p_data_origem,
+            p_turno_origem
+            USING ERRCODE = 'no_data_found';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM atuacao_profissional AS ap
+        JOIN atuacao_residente AS ar ON ar.id = ap.id
+        WHERE ar.id = p_id_atuacao_residente
+          AND ap.data_inicio <= p_data_destino
+          AND (ap.data_fim IS NULL OR p_data_destino <= ap.data_fim)
+    ) THEN
+        RAISE EXCEPTION
+            'Atuacao residente % nao esta vigente na data de destino %.',
+            p_id_atuacao_residente,
+            p_data_destino
+            USING ERRCODE = 'check_violation';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM escala AS e
+        JOIN atuacao_profissional AS ap
+          ON ap.id = e.id_atuacao_preceptor
+        JOIN atuacao_preceptor AS apre
+          ON apre.id = ap.id
+        WHERE e.id_atuacao_residente = p_id_atuacao_residente
+          AND e.data_plantao = p_data_origem
+          AND e.turno = p_turno_origem
+          AND (
+              ap.data_inicio > p_data_destino
+              OR (ap.data_fim IS NOT NULL AND ap.data_fim < p_data_destino)
+          )
+    ) THEN
+        RAISE EXCEPTION
+            'Ha preceptor sem atuacao vigente na data de destino %.',
+            p_data_destino
+            USING ERRCODE = 'check_violation';
+    END IF;
+
+    -- O trigger da etapa 2 proibe o mesmo residente em qualquer outra unidade
+    -- na mesma data/turno :X
+    IF EXISTS (
+        SELECT 1
+        FROM escala AS e
+        WHERE e.id_atuacao_residente = p_id_atuacao_residente
+          AND e.data_plantao = p_data_destino
+          AND e.turno = p_turno_destino
+    ) THEN
+        RAISE EXCEPTION
+            'Conflito de escala para o residente % no destino %/%.',
+            p_id_atuacao_residente,
+            p_data_destino,
+            p_turno_destino
+            USING ERRCODE = 'unique_violation';
+    END IF;
+
+    UPDATE escala AS e
+    SET data_plantao = p_data_destino,
+        turno = p_turno_destino
+    WHERE e.id_atuacao_residente = p_id_atuacao_residente
+      AND e.data_plantao = p_data_origem
+      AND e.turno = p_turno_origem;
+
+    GET DIAGNOSTICS v_quantidade_atualizada = ROW_COUNT;
+    RETURN v_quantidade_atualizada;
+END;
+$$;
