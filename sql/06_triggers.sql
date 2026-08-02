@@ -77,7 +77,36 @@ AFTER INSERT OR UPDATE OR DELETE ON atendimento
 
 FOR EACH ROW EXECUTE FUNCTION audita_atendimento();
 
+-- função do trigger trg_atualiza_media_procedimentos --
+CREATE OR REPLACE FUNCTION atualiza_media_procedimentos()
+RETURNS TRIGGER
+AS $$
+DECLARE 
+    -- usando a mesma tipagem do schema 
+    v_media NUMERIC(10,2);
+BEGIN 
+    -- calcula a media e força o arredondamento para 2 casas decimais 
+    SELECT ROUND(AVG(tempo_real_minutos), 2)
+    INTO v_media
+    FROM procedimento_realizado
+    WHERE id_procedimento = NEW.id_procedimento;
 
+    -- atualiza a tabela procedimento respeitando o check (is null or > 0)  
+    UPDATE procedimento
+    SET media_tempo_procedimento = v_media
+    WHERE id = NEW.id_procedimento;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_atualiza_media_procedimentos ON procedimento_realizado;
+CREATE TRIGGER trg_atualiza_media_procedimentos
+AFTER INSERT ON procedimento_realizado
+-- foi usado novamente o trigger do tipo de linha por motivos de:
+-- o código precisa saber exatamente qual procedimento teve uma nova ocorrência inserida
+
+FOR EACH ROW EXECUTE FUNCTION atualiza_media_procedimentos();
 
 
 
