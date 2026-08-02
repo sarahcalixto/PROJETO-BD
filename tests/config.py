@@ -66,17 +66,19 @@ def _prepared_database(database_config: DatabaseConfig) -> Iterator[DatabaseConf
         connection = psycopg.connect(
             **database_config.connection_kwargs, autocommit=True)
     except psycopg.OperationalError as error:
-        pytest.skip(f"PostgreSQL indisponivel em {
-                    database_config.host}:{database_config.port}: {error}")
+        pytest.skip(
+            "PostgreSQL indisponivel em "
+            f"{database_config.host}:{database_config.port}: {error}"
+        )
 
     with connection:
         with connection.cursor() as cur:
             cur.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
             cur.execute(read_sql("01_schema.sql"))
             cur.execute(read_sql("02_dados_teste.sql"))
-            cur.execute(read_sql("06_triggers.sql")) 
+            cur.execute(read_sql("05_procedures.sql"))
+            cur.execute(read_sql("06_triggers.sql"))
             cur.execute(read_sql("07_views.sql"))
-            
             crud_statements = split_sql_statements(
                 read_sql("03_crud_consultas.sql"))
             for statement in crud_statements:
