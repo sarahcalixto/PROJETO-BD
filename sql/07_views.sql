@@ -21,7 +21,7 @@ JOIN paciente pac ON i.id_paciente = pac.id
 JOIN pessoa pes ON pac.id = pes.id
 WHERE i.data_hora_saida IS NULL;
 
--- view vw_residentes_sem_supervisor -- 
+-- view vw_residentes_sem_supervisor --
 CREATE OR REPLACE VIEW vw_residentes_sem_supervisor AS
 SELECT DISTINCT
     e.data_plantao,
@@ -55,7 +55,7 @@ WHERE LOWER(aprec.titulacao) <> 'doutor'
 CREATE OR REPLACE VIEW vw_estatisticas_atendimentos_mensal AS
 
 WITH BaseAtendimentos AS (
-    SELECT 
+    SELECT
         a.id AS id_atendimento,
         a.id_unidade,
         u.nome AS unidade,
@@ -66,7 +66,7 @@ WITH BaseAtendimentos AS (
     JOIN unidade u ON a.id_unidade = u.id
 ),
 EstatisticasGerais AS (
-    SELECT 
+    SELECT
         ano,
         mes,
         id_unidade,
@@ -77,7 +77,7 @@ EstatisticasGerais AS (
     GROUP BY ano, mes, id_unidade, unidade
 ),
 ContagemProcedimentos AS (
-    SELECT 
+    SELECT
         b.ano,
         b.mes,
         b.id_unidade,
@@ -89,18 +89,18 @@ ContagemProcedimentos AS (
     GROUP BY b.ano, b.mes, b.id_unidade, p.nome
 ),
 RankingProcedimentos AS (
-    SELECT 
+    SELECT
         ano,
         mes,
         id_unidade,
         procedimento,
         ROW_NUMBER() OVER(
-            PARTITION BY ano, mes, id_unidade 
+            PARTITION BY ano, mes, id_unidade
             ORDER BY qtd_realizado DESC, procedimento ASC
         ) AS rn
     FROM ContagemProcedimentos
 )
-SELECT 
+SELECT
     eg.ano,
     eg.mes,
     eg.unidade,
@@ -108,9 +108,8 @@ SELECT
     eg.media_duracao_minutos,
     rp.procedimento AS procedimento_mais_comum
 FROM EstatisticasGerais eg
-LEFT JOIN RankingProcedimentos rp 
-    ON eg.ano = rp.ano 
-   AND eg.mes = rp.mes 
-   AND eg.id_unidade = rp.id_unidade 
+LEFT JOIN RankingProcedimentos rp
+    ON eg.ano = rp.ano
+   AND eg.mes = rp.mes
+   AND eg.id_unidade = rp.id_unidade
    AND rp.rn = 1;
-

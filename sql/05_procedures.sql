@@ -316,7 +316,7 @@ BEGIN
     END IF;
 
     -- nao basta bloquear escalas existentes: o destino pode ainda estar vazio
-    -- toda operacao concorrente para o mesmo residente 
+    -- toda operacao concorrente para o mesmo residente
     -- disputa esta mesma linha :/
     PERFORM 1
     FROM atuacao_residente

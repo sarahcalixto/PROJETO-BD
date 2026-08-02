@@ -104,7 +104,7 @@ def listar_atendimentos_paciente(session: Session, id_paciente: int) -> list[Ate
         .where(Atendimento.id_paciente == id_paciente)
         .order_by(Atendimento.data_hora, Atendimento.id)
     ).all()
-    
+
     return [_atendimento_dto(atendimento) for atendimento in atendimentos]
 
 
@@ -160,7 +160,7 @@ def remover_procedimento_nao_faturado(session: Session, id_atendimento: int, id_
     realizacao = session.get(ProcedimentoRealizado, chave)
     if realizacao is None:
         raise EntidadeNaoEncontrada("Procedimento realizado", chave)
-    
+
     if realizacao.faturado:
         raise RegraNegocioViolada("Procedimento realizado já está faturado")
 
@@ -201,7 +201,7 @@ def calcular_tempo_medio_por_residente(session: Session) -> list[MediaResidenteD
         .group_by(Atendimento.id_atuacao_residente, Pessoa.nome)
         .order_by(media.desc(), Pessoa.nome.asc())
     )
-    
+
     return [
         MediaResidenteDTO(id_atuacao, nome, Decimal(valor))
         for id_atuacao, nome, valor in session.execute(statement)
