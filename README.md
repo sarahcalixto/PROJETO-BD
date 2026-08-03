@@ -132,6 +132,4 @@ docs/modelagem/               DER, modelo relacional e normalização
 - [Relatório técnico da Etapa 2](docs/relatorio_etapa2.md)
 - [Relatório da auditoria](docs/relatorio_auditoria.md)
 
-A apresentação de 10 minutos, a publicação no GitHub e a paginação final do
-relatório são atividades externas e não podem ser comprovadas apenas pelo
-estado local do repositório.
+
