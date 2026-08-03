@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased, selectinload
 
 from projeto_hospital.orm import (
@@ -13,6 +14,7 @@ from projeto_hospital.orm import (
     AtuacaoPreceptor,
     AtuacaoProfissional,
     AtuacaoResidente,
+    Escala,
     Paciente,
     Pessoa,
     ProcedimentoRealizado,
@@ -23,6 +25,7 @@ from projeto_hospital.services.dtos import (
     AtendimentoDTO,
     AtendimentoHistoricoDTO,
     ConvenioPacienteDTO,
+    EscalaDTO,
     MediaResidenteDTO,
     ProcedimentoAtendimentoDTO,
     ProcedimentoRemovidoDTO,
@@ -45,8 +48,14 @@ def _atendimento_dto(atendimento: Atendimento) -> AtendimentoDTO:
     )
 
 
-def _validar_vigencia(atuacao: AtuacaoProfissional, data_hora: datetime, papel: str) -> None:
-    data_referencia = data_hora.date()
+def _validar_vigencia(
+    atuacao: AtuacaoProfissional,
+    referencia: date | datetime,
+    papel: str,
+) -> None:
+    data_referencia = (
+        referencia.date() if isinstance(referencia, datetime) else referencia
+    )
 
     vigente = atuacao.data_inicio <= data_referencia and (
         atuacao.data_fim is None or data_referencia <= atuacao.data_fim
@@ -54,6 +63,82 @@ def _validar_vigencia(atuacao: AtuacaoProfissional, data_hora: datetime, papel: 
 
     if not vigente:
         raise RegraNegocioViolada(f"Atuação {papel} {atuacao.id} não está vigente em {data_referencia}")
+
+
+def criar_escala(
+    session: Session,
+    *,
+    id_unidade: int,
+    data_plantao: date,
+    turno: str,
+    id_atuacao_residente: int,
+    id_atuacao_preceptor: int,
+) -> EscalaDTO:
+    """Cria uma escala e deixa conflitos concorrentes para o PostgreSQL."""
+
+    identificadores = (
+        (id_unidade, "Unidade"),
+        (id_atuacao_residente, "Atuação residente"),
+        (id_atuacao_preceptor, "Atuação preceptora"),
+    )
+    for identificador, campo in identificadores:
+        if (
+            not isinstance(identificador, int)
+            or isinstance(identificador, bool)
+            or identificador <= 0
+        ):
+            raise RegraNegocioViolada(f"{campo} deve ser um identificador positivo")
+    if not isinstance(data_plantao, date) or isinstance(data_plantao, datetime):
+        raise RegraNegocioViolada("Informe uma data de plantão válida")
+    if turno not in {"manha", "tarde", "noite"}:
+        raise RegraNegocioViolada("Informe um turno válido")
+
+    if session.get(Unidade, id_unidade) is None:
+        raise EntidadeNaoEncontrada("Unidade", id_unidade)
+    residente = session.get(AtuacaoResidente, id_atuacao_residente)
+    if residente is None:
+        raise EntidadeNaoEncontrada("Atuação residente", id_atuacao_residente)
+    preceptor = session.get(AtuacaoPreceptor, id_atuacao_preceptor)
+    if preceptor is None:
+        raise EntidadeNaoEncontrada("Atuação preceptora", id_atuacao_preceptor)
+
+    _validar_vigencia(residente.atuacao, data_plantao, "residente")
+    _validar_vigencia(preceptor.atuacao, data_plantao, "preceptora")
+
+    escala = Escala(
+        id_unidade=id_unidade,
+        data_plantao=data_plantao,
+        turno=turno,
+        id_atuacao_residente=id_atuacao_residente,
+        id_atuacao_preceptor=id_atuacao_preceptor,
+    )
+    session.add(escala)
+    try:
+        session.flush()
+    except IntegrityError as error:
+        origem = error.orig
+        diagnostico = getattr(origem, "diag", None)
+        sqlstate = getattr(origem, "sqlstate", None)
+        constraint = getattr(diagnostico, "constraint_name", None)
+        mensagem = getattr(diagnostico, "message_primary", "")
+        conflito_de_escala = constraint in {
+            "escala_unidade_residente_uq",
+            "escala_residente_turno_uq",
+        } or (sqlstate == "23514" and mensagem.startswith("Conflito de escala"))
+        if conflito_de_escala:
+            raise RegraNegocioViolada(
+                "Este residente já está escalado nesta data e turno."
+            ) from error
+        raise
+
+    return EscalaDTO(
+        id_escala=escala.id,
+        id_unidade=escala.id_unidade,
+        data_plantao=escala.data_plantao,
+        turno=escala.turno,
+        id_atuacao_residente=escala.id_atuacao_residente,
+        id_atuacao_preceptor=escala.id_atuacao_preceptor,
+    )
 
 
 def inserir_atendimento_validado(session: Session, *, id_atendimento: int, data_hora: datetime, duracao_minutos: int, id_paciente: int, id_atuacao_residente: int, id_atuacao_preceptor: int, id_unidade: int) -> AtendimentoDTO:

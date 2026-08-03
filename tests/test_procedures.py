@@ -437,7 +437,8 @@ def test_reajustar_escala_move_origem_e_preserva_demais_escalas(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, data_plantao, turno::text
+            SELECT id, data_plantao, turno::text,
+                   id_unidade, id_atuacao_preceptor
             FROM escala
             WHERE id IN (%s, %s)
             ORDER BY id
@@ -447,8 +448,8 @@ def test_reajustar_escala_move_origem_e_preserva_demais_escalas(
         escalas = {row[0]: row[1:] for row in cur.fetchall()}
 
     assert quantidade == 1
-    assert escalas[id_movido] == (data_destino, "noite")
-    assert escalas[id_preservado] == (date(2027, 1, 11), "tarde")
+    assert escalas[id_movido] == (data_destino, "noite", 1, 6)
+    assert escalas[id_preservado] == (date(2027, 1, 11), "tarde", 1, 6)
 
 
 def test_reajustar_multiplas_escalas_na_mesma_transacao(

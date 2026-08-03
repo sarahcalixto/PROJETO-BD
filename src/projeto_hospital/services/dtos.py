@@ -157,6 +157,16 @@ class ReajusteEscalaDTO:
 
 
 @dataclass(frozen=True, slots=True)
+class EscalaDTO:
+    id_escala: int
+    id_unidade: int
+    data_plantao: date
+    turno: str
+    id_atuacao_residente: int
+    id_atuacao_preceptor: int
+
+
+@dataclass(frozen=True, slots=True)
 class MedicaoCarregamentoDTO:
     id_paciente: int
     consultas_lazy: int
