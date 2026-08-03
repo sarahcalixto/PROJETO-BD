@@ -1,40 +1,38 @@
-# Modelo relacional — versão 3.0
+# Modelo relacional
 
-O modelo abaixo traduz o DER ampliado para relações. Tipos físicos e sintaxe SQL pertencem à etapa de implementação.
+| Relação | Atributos principais | Chaves e restrições |
+|---|---|---|
+| PESSOA | id, nome, cpf, data_nascimento, is_flamengo, telefone | PK id; UNIQUE cpf |
+| PACIENTE | id, num_convenio, grupo_sanguineo | PK/FK id → PESSOA |
+| ALERGIA | id, nome | PK id; UNIQUE nome |
+| PACIENTE_ALERGIA | id_paciente, id_alergia | PK composta; FKs para PACIENTE e ALERGIA |
+| PROFISSIONAL | id, crm, data_admissao, especialidade | PK/FK id → PESSOA; UNIQUE crm |
+| ATUACAO_PROFISSIONAL | id, id_profissional, tipo, data_inicio, data_fim | PK id; FK profissional; período válido e não sobreposto |
+| ATUACAO_RESIDENTE | id, tipo, ano_residencia | PK/FK composta para atuação; tipo residente |
+| ATUACAO_PRECEPTOR | id, tipo, titulacao | PK/FK composta para atuação; tipo preceptor |
+| UNIDADE | id, nome, tipo, capacidade_leitos | PK id; capacidade não negativa |
+| ATENDIMENTO | id, data_hora, duracao_minutos, paciente, residente, preceptor, unidade | PK id; quatro FKs obrigatórias; duração positiva |
+| PROCEDIMENTO | id, codigo, nome, tempo_medio_minutos, nivel_risco, media_tempo_procedimento | PK id; UNIQUE codigo; tempos positivos |
+| PROCEDIMENTO_REALIZADO | id_atendimento, id_procedimento, quantidade, tempo_real_minutos, data_hora_inicio, observacao, faturado | PK composta; FKs; quantidade e tempo positivos |
+| ESCALA | id, unidade, data_plantao, turno, residente, preceptor | PK id; FKs; duas chaves candidatas de residente/plantão |
+| INTERNACAO | id, paciente, unidade, data_hora_entrada, data_hora_saida | PK id; FKs; período válido; uma internação ativa por paciente |
+| AUDITORIA_ATENDIMENTO | id_auditoria, id_atendimento, operacao, usuario, data_hora, dados_antigos, dados_novos | PK id_auditoria; operação validada; referência lógica ao atendimento |
 
-| Relação | Atributos | Chave primária | Chaves estrangeiras | Restrições principais |
-|---|---|---|---|---|
-| PESSOA | id_pessoa, nome, cpf, data_nascimento, is_flamengo, telefone | id_pessoa | — | cpf único |
-| PACIENTE | id_pessoa, num_convenio, alergias, grupo_sanguineo | id_pessoa | id_pessoa → PESSOA(id_pessoa) | PK compartilhada com PESSOA |
-| PROFISSIONAL | id_pessoa, crm, data_admissao, especialidade | id_pessoa | id_pessoa → PESSOA(id_pessoa) | crm único; PK compartilhada com PESSOA |
-| ATUACAO_PROFISSIONAL | id_atuacao, id_profissional, data_inicio, data_fim | id_atuacao | id_profissional → PROFISSIONAL(id_pessoa) | data_fim ausente ou posterior/igual a data_inicio; períodos do mesmo profissional não se sobrepõem |
-| ATUACAO_RESIDENTE | id_atuacao, ano_residencia | id_atuacao | id_atuacao → ATUACAO_PROFISSIONAL(id_atuacao) | ano_residencia em R1, R2 ou R3; PK compartilhada |
-| ATUACAO_PRECEPTOR | id_atuacao, titulacao | id_atuacao | id_atuacao → ATUACAO_PROFISSIONAL(id_atuacao) | PK compartilhada |
-| UNIDADE | id_unidade, nome, tipo, capacidade_leitos | id_unidade | — | tipo no domínio aprovado; capacidade_leitos não negativa |
-| ATENDIMENTO | id_atendimento, data_hora, duracao_minutos, id_paciente, id_atuacao_residente, id_atuacao_preceptor, id_unidade | id_atendimento | id_paciente → PACIENTE(id_pessoa); id_atuacao_residente → ATUACAO_RESIDENTE(id_atuacao); id_atuacao_preceptor → ATUACAO_PRECEPTOR(id_atuacao); id_unidade → UNIDADE(id_unidade) | duração positiva; FKs obrigatórias; atuações vigentes em data_hora |
-| PROCEDIMENTO | id_procedimento, codigo, nome, tempo_medio_minutos, nivel_risco, media_tempo_procedimento | id_procedimento | — | codigo único; tempos positivos; risco em BAIXO, MEDIO ou ALTO; média derivada |
-| PROCEDIMENTO_REALIZADO | id_atendimento, id_procedimento, quantidade, tempo_real_minutos, data_hora_inicio, observacao, faturado | (id_atendimento, id_procedimento) | id_atendimento → ATENDIMENTO(id_atendimento); id_procedimento → PROCEDIMENTO(id_procedimento) | quantidade e tempo real positivos; início não anterior ao atendimento; faturado padrão falso |
-| ESCALA | id_escala, id_unidade, turno, data_plantao, id_atuacao_residente, id_atuacao_preceptor | id_escala | id_unidade → UNIDADE(id_unidade); id_atuacao_residente → ATUACAO_RESIDENTE(id_atuacao); id_atuacao_preceptor → ATUACAO_PRECEPTOR(id_atuacao) | UNIQUE(id_unidade, data_plantao, turno, id_atuacao_residente); domínio de turno; atuações vigentes na data |
-| INTERNACAO | id_internacao, id_paciente, id_unidade, data_hora_entrada, data_hora_saida | id_internacao | id_paciente → PACIENTE(id_pessoa); id_unidade → UNIDADE(id_unidade) | saída nula ou não anterior à entrada; uma internação ativa por paciente |
-| AUDITORIA_ATENDIMENTO | id_auditoria, id_atendimento, operacao, usuario, data_hora, dados_antigos, dados_novos | id_auditoria | — | operação em INSERT, UPDATE ou DELETE; imagens JSONB |
+## Especializações
 
-## Mapeamento das especializações
+PESSOA possui especialização parcial e sobreposta em PACIENTE e PROFISSIONAL.
+Uma pessoa pode não exercer nenhuma dessas classificações ou possuir ambas.
 
-PACIENTE e PROFISSIONAL usam a chave de PESSOA como PK e FK. Como a especialização é parcial e sobreposta, uma PESSOA pode não aparecer em nenhuma dessas relações ou aparecer nas duas.
+ATUACAO_PROFISSIONAL possui especialização total e disjunta. Cada período é
+exatamente residente ou preceptor; o discriminador e as FKs compostas garantem
+compatibilidade, triggers diferidos garantem totalidade e a exclusão temporal
+impede que o mesmo profissional ocupe dois papéis no mesmo instante.
 
-ATUACAO_RESIDENTE e ATUACAO_PRECEPTOR usam a chave de ATUACAO_PROFISSIONAL como PK e FK. A especialização é total e disjunta: cada atuação deve aparecer em exatamente uma das duas relações.
+## Decisões derivadas dos requisitos
 
-## Mapeamento dos relacionamentos
-
-- RECEBE é materializado por `id_paciente` em ATENDIMENTO.
-- REALIZA e SUPERVISIONA são materializados pelas FKs de atuação em ATENDIMENTO.
-- OCORRE_EM é materializado por `id_unidade` em ATENDIMENTO.
-- PROCEDIMENTO_REALIZADO materializa o relacionamento N:N entre ATENDIMENTO e PROCEDIMENTO e mantém seus atributos próprios.
-- ACONTECE_EM, ESCALADO_EM e SUPERVISIONA_PLANTAO são materializados pelas três FKs de ESCALA.
-- INTERNACAO mantém o histórico N:1 de pacientes e unidades.
-- AUDITORIA_ATENDIMENTO mantém referência lógica, sem FK, para sobreviver a DELETE.
-- `dia_semana` é calculado a partir de `data_plantao` em consultas e não é armazenado na relação normalizada.
-
-## Regras que excedem constraints simples
-
-A especialização total/disjunta, a ausência de sobreposição de atuações e a vigência da atuação nas datas referenciadas exigem validação transacional, trigger ou mecanismo equivalente na implementação física. Este documento apenas formaliza essas regras.
+- `data_plantao` substitui o armazenamento de `dia_semana`; o dia é calculado.
+- O vínculo de ATENDIMENTO com UNIDADE viabiliza as estatísticas mensais.
+- `nivel_risco`, `faturado`, `data_hora_inicio` e a média observada existem
+  porque são usados por consultas, procedures ou triggers oficiais.
+- AUDITORIA_ATENDIMENTO não possui FK para preservar eventos de DELETE.
+- A unicidade global de escala torna a regra da trigger segura sob concorrência.

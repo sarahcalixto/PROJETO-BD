@@ -1,78 +1,82 @@
 # Relatório técnico — Etapa 2
 
-## Visão geral
+## Evolução do banco
 
-A Etapa 2 mantém o modelo normalizado e o SQL puro da primeira entrega, mas
-adiciona regras no PostgreSQL, uma camada SQLAlchemy 2.x e uma demonstração de
-concorrência. A separação foi intencional: constraints e triggers protegem os
-dados independentemente do cliente; rotinas armazenadas concentram operações
-atômicas; serviços ORM oferecem contratos Python testáveis sem SQL textual.
+A Etapa 2 mantém o modelo da Etapa 1 e acrescenta os dados necessários às
+rotinas e análises avançadas: início efetivo do procedimento, média observada
+do procedimento, internações e auditoria de atendimentos. O atendimento também
+se relaciona com uma unidade e a escala armazena `data_plantao`; o dia da semana
+é derivado dessa data para evitar redundância.
 
-O schema ganhou internações, horário efetivo de início dos procedimentos, média
-observada por procedimento e auditoria de atendimentos. A massa de teste cobre
-internações abertas/encerradas, diferentes titulações, conflitos de escala e
-procedimentos com riscos distintos.
+O histórico de papéis profissionais é representado por
+`ATUACAO_PROFISSIONAL`, com subtipos residente e preceptor. Uma constraint de
+exclusão impede períodos sobrepostos para o mesmo profissional. Triggers de
+constraint diferidos permitem inserir pai e subtipo na mesma transação e, no
+commit, exigem exatamente um subtipo compatível com o discriminador.
 
-## Rotinas, triggers e atomicidade
+A escala preserva a chave candidata pedida no enunciado e também possui uma
+unicidade global por data, turno e residente. A segunda garantia torna a regra
+segura diante de duas inserções concorrentes em unidades diferentes; a trigger
+obrigatória continua oferecendo a mensagem de domínio antes da gravação.
 
-As três rotinas solicitadas são implementadas com `CREATE FUNCTION`. No
-PostgreSQL, functions e procedures são rotinas armazenadas; a escolha por
-functions foi necessária porque os contratos retornam, respectivamente, o ID
-criado, uma tabela de médias e a quantidade de escalas movidas. Uma procedure
-chamada com `CALL` não oferece esses retornos da mesma maneira. A decisão não
-reduz a atomicidade: cada chamada participa da transação do chamador e qualquer
-exceção reverte todas as alterações feitas pela rotina.
+## Procedures e triggers
 
-`sp_registrar_atendimento_completo` valida referências e vigência, exige um
-array JSONB não vazio, cria o atendimento e percorre os procedimentos na ordem
-recebida. Um item inválido interrompe a instrução e nenhum registro parcial
-permanece. A rotina também serializa reenvios idênticos, rejeita autosupervisão
-e garante que cada procedimento termine dentro da janela do atendimento.
-`sp_calcular_tempo_medio_espera` usa o primeiro início por
-atendimento. `sp_reajustar_escala` bloqueia a atuação do residente com
-`FOR UPDATE`, valida todo o destino e só então altera o conjunto.
+As rotinas com retorno foram implementadas como funções armazenadas do
+PostgreSQL, mantendo os nomes `sp_*` oficiais. Essa forma permite retornar o
+identificador criado, tabelas calculadas e quantidades alteradas sem abrir mão
+da execução transacional.
 
-Os triggers têm responsabilidades diferentes. O trigger de sobreposição atua
-antes de `INSERT` e `UPDATE`; o de auditoria registra imagens JSONB anterior e
-nova após as três operações; o de média recalcula o valor exato depois de cada
-nova realização. As views mantêm consultas reutilizáveis: a internação mais
-recente, supervisão inadequada por titulação ou vigência e estatísticas mensais
-com desempate alfabético determinístico.
+`sp_registrar_atendimento_completo` recebe um array JSONB, valida referências e
+insere o atendimento e seus procedimentos na transação do chamador. Qualquer
+erro é propagado e o `session_scope` do SQLAlchemy executa rollback integral.
+`sp_calcular_tempo_medio_espera` encontra o primeiro procedimento de cada
+atendimento e calcula a média por unidade; unidades sem ocorrência permanecem
+no resultado com valor nulo. `sp_reajustar_escala` bloqueia a atuação residente,
+valida origem, destino e vigência e só então atualiza o conjunto completo.
 
-## SQLAlchemy e consultas
+Triggers foram escolhidos para invariantes que precisam valer em qualquer
+caminho de escrita. `trg_check_sobreposicao_escala` rejeita o residente em duas
+unidades no mesmo plantão. `trg_audita_atendimento` registra as imagens JSONB
+anterior e nova em INSERT, UPDATE e DELETE. A auditoria mantém uma referência
+lógica, sem chave estrangeira, para sobreviver à exclusão do atendimento.
+`trg_atualiza_media_procedimentos` mantém a média observada; embora o requisito
+mínimo cite INSERT, UPDATE e DELETE também são tratados para que a coluna não
+fique obsoleta após a operação de remoção exigida na Etapa 1.
 
-Todas as tabelas são mapeadas com entidades e relacionamentos. A fábrica de
-sessões usa transações explícitas e `session_scope` confirma no sucesso ou faz
-rollback diante de qualquer erro. As seis operações e as quatro consultas da
-Etapa 1 foram reimplementadas com `select`, joins e funções da DSL, sem SQL cru.
+## Views e ORM
 
-As três consultas avançadas possuem DTOs imutáveis. A primeira encontra os
-preceptores de atendimentos de pacientes flamenguistas; a segunda usa uma
-função de janela para escolher, com desempate por ID, o último atendimento de
-cada paciente e carrega profissionais e procedimentos; a terceira usa
-`OUTER JOIN` para preservar residentes sem procedimentos e calcula o percentual
-de alto risco com duas casas decimais.
+As três views são comuns, não materializadas, pois o volume acadêmico é baixo e
+as telas devem refletir o estado atual. `vw_pacientes_internados` considera a
+internação mais recente. `vw_residentes_sem_supervisor` identifica titulação
+diferente de doutor ou atuação preceptora fora da vigência. A view mensal agrega
+por ano, mês e unidade; o procedimento mais comum é o de maior soma da
+quantidade executada e empates são resolvidos pelo nome em ordem alfabética.
 
-O carregamento lazy permanece como padrão dos mapeamentos. Um teste instrumenta
-o engine e demonstra três comandos quando pessoa e atendimentos são acessados
-sob demanda. A variante eager usa `joinedload` e executa um único comando, sem
-consultas adicionais ao navegar pelos mesmos relacionamentos.
+O SQLAlchemy 2 mapeia todas as relações e reimplementa as operações da Etapa 1
+com `select`, joins, agregações, subconsultas correlacionadas e transações, sem
+SQL textual. As consultas de leitura retornam dataclasses imutáveis para que a
+interface não dependa de entidades ligadas a uma sessão já encerrada.
+Relacionamentos permanecem lazy por padrão. Nos relatórios que percorrem
+coleções são aplicados `selectinload` ou `joinedload`; a medição disponível na
+página Auditoria registra a diferença no número de consultas.
 
-## Concorrência, testes e limitações atuais
+As consultas avançadas retornam preceptores ligados a atendimentos de pacientes
+flamenguistas, o atendimento mais recente de cada paciente com profissionais e
+procedimentos e o percentual de registros de procedimentos de alto risco por
+residente. O percentual usa linhas de `PROCEDIMENTO_REALIZADO`, e não o campo
+`quantidade`, por tratar cada linha como a ocorrência associativa avaliada.
 
-A demonstração concorrente abre duas sessões SQLAlchemy. A primeira reajusta a
-escala e mantém o lock; a segunda inicia o mesmo destino e fica bloqueada. Após
-o commit da primeira, a segunda reavalia o estado e é rejeitada. O teste exige
-uma confirmação, uma rejeição, uma única escala final e os logs da espera.
+## Concorrência e interface
 
-A suíte é dividida por procedures, triggers, views, operações ORM, consultas
-avançadas, concorrência e entrega. Ela também verifica rollback, resultados
-vazios, entidades ausentes, JSON inválido, valores exatos e objetos instalados
-no catálogo do PostgreSQL. A interface usa os serviços ORM e disponibiliza
-operações, views, consultas avançadas e evidências técnicas sob demanda.
-O cadastro exige escolhas explícitas, inicia a grade de procedimentos vazia,
-valida linhas parciais antes do banco e apresenta o histórico com nomes e
-identificadores operacionais em vez de chaves internas.
+A demonstração cria duas escalas temporárias do mesmo residente e unidade em
+datas de origem diferentes. Duas sessões tentam movê-las para a mesma data e
+turno. A primeira mantém o lock pessimista sobre a atuação; a segunda aguarda,
+reavalia o destino depois do commit e é rejeitada. Uma terceira sessão confirma
+uma única escala final, e a limpeza remove somente os IDs criados pela própria
+demonstração.
 
-A implementação e as evidências exigidas para a Etapa 2 estão concluídas. A tag
-final poderá ser criada após o merge e a publicação da branch de entrega.
+O Streamlit foi organizado em seis páginas de domínio. A interface faz
+validações de preenchimento para melhorar a experiência, mas referências,
+vigência, atomicidade, faturamento e conflitos permanecem protegidos nos
+serviços e no PostgreSQL. Consultas e evidências são executadas somente quando
+selecionadas, reduzindo reruns e trabalho oculto.

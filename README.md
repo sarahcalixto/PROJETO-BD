@@ -1,18 +1,18 @@
-# Sistema de Gestão Hospitalar — Etapa 2
+# Sistema de Gestão Hospitalar Dra. Yuska Maritan Brito
 
-Aplicação PostgreSQL + SQLAlchemy + Streamlit para atendimentos, pacientes,
-procedimentos, internações e escalas do Hospital Dra. Yuska Maritan Brito.
-
-O produto final implementa procedures, triggers, views, ORM, consultas
-avançadas e controle de concorrência, incluindo evidências no front.
+Projeto acadêmico em PostgreSQL 16, SQLAlchemy 2 e Streamlit para gerenciar
+atendimentos, pacientes, profissionais, procedimentos, internações e escalas.
+O repositório preserva as operações em SQL puro da Etapa 1 e apresenta sua
+reimplementação por ORM, além das rotinas, triggers, views e concorrência da
+Etapa 2.
 
 ## Pré-requisitos
 
 - Python 3.12 ou superior;
-- `uv`;
+- [`uv`](https://docs.astral.sh/uv/);
 - Docker com Docker Compose, ou PostgreSQL 16 local.
 
-## Instalação rápida
+## Instalação
 
 ```bash
 git clone git@github.com:sarahcalixto/PROJETO-BD.git
@@ -24,13 +24,11 @@ uv run python scripts/preparar_banco.py
 uv run streamlit run frontend/app.py
 ```
 
-Acesse `http://localhost:8501`.
+A aplicação fica disponível em `http://localhost:8501`. O preparador é
+idempotente: cria uma base vazia pelo schema final ou migra uma base existente
+antes de instalar as rotinas, triggers e views.
 
-O comando de preparação é idempotente. Em um banco vazio, instala diretamente
-o produto final da Etapa 2. Em um banco existente do projeto, adiciona os
-objetos novos, faz o backfill necessário e preserva os dados atuais.
-
-As variáveis padrão são:
+Variáveis padrão:
 
 ```env
 DB_HOST=localhost
@@ -40,69 +38,77 @@ DB_USER=postgres
 DB_PASSWORD=postgres
 ```
 
-O `.env` não deve ser versionado.
+O arquivo `.env` é local e não deve ser versionado.
 
-## Recursos disponíveis no front
+## Funcionalidades demonstráveis
 
-- atendimento completo com múltiplos procedimentos e rollback integral;
-- seleções obrigatórias sem valores presumidos e proteção contra reenvio;
-- histórico, convênio, procedimentos e análises usando SQLAlchemy ORM;
-- reajuste atômico de escala;
+- registro atômico de atendimento com múltiplos procedimentos;
+- histórico do paciente, listagem e remoção protegida por faturamento;
+- atualização de convênio e tempo médio por residente;
+- consultas analíticas da Etapa 1;
+- reajuste transacional de escalas;
 - três views e três consultas ORM avançadas;
-- média de espera por unidade;
-- auditoria, status dos triggers e médias dos procedimentos;
-- comparação lazy/eager e concorrência com logs reais.
+- tempo médio de espera, auditoria e média real dos procedimentos;
+- comparação lazy/eager e concorrência pessimista com logs.
+
+A navegação usa somente conceitos do domínio: Visão geral, Atendimentos,
+Pacientes, Escalas, Consultas e estatísticas e Auditoria.
+
+## Scripts SQL
+
+| Script | Finalidade |
+|---|---|
+| `01_schema.sql` | Schema físico completo e constraints |
+| `02_dados_teste.sql` | Dados mínimos determinísticos |
+| `03_crud_consultas.sql` | CRUD e consultas básicas em SQL puro |
+| `04_consultas_analiticas.sql` | Consultas analíticas em SQL puro |
+| `05_procedures.sql` | Três rotinas armazenadas |
+| `06_triggers.sql` | Triggers obrigatórios e integridade temporal |
+| `07_views.sql` | Três views obrigatórias |
+| `08_migracao_etapa2.sql` | Migração estrutural idempotente |
+
+As rotinas com retorno são funções armazenadas do PostgreSQL. Elas mantêm os
+nomes `sp_*` pedidos no enunciado e são chamadas dentro de transações explícitas.
 
 ## Testes
 
-Com o PostgreSQL saudável:
+Com o PostgreSQL saudável, a suíte recria apenas o schema `public` de
+`projeto_hospital_teste`; o banco principal não é apagado.
 
 ```bash
-uv run pytest tests/test_app.py
-uv run pytest tests/test_services_front_etapa2.py tests/test_migracao_etapa2.py
-uv run pytest tests/test_aceitacao_etapa2.py
 uv run pytest
-```
-
-Os testes de integração recriam somente `projeto_hospital_teste`; o banco
-principal não é apagado.
-
-Validações adicionais:
-
-```bash
 uv run python -m compileall -q src frontend scripts tests
 git diff --check
 ```
 
-## Estrutura essencial
-
-```text
-frontend/                       entrada e scripts das páginas Streamlit
-src/projeto_hospital/orm/       entidades, engine e sessões SQLAlchemy
-src/projeto_hospital/services/  operações, consultas e transações
-src/projeto_hospital/ui/        componentes, dados e páginas reutilizáveis
-sql/                            schema, migração, rotinas, triggers, views e dados
-tests/                          testes unitários, integração, interface e aceitação
-```
-
-## Scripts SQL
-
-Os scripts `01` e `02` descrevem a base final. O script `08` preserva e migra
-uma base existente. O preparador aplica as rotinas `05`, os triggers `06`, as
-views `07` e os dados demonstrativos `09`.
-
-## Documentação
-
-- [Requisitos da Etapa 2](docs/requisitos/requisitos_etapa_2.md)
-- [Relatório técnico](docs/relatorio_etapa2.md)
-- [Matriz de conformidade](docs/matriz_conformidade_etapa2.md)
-- [Modelo e normalização](docs/modelagem/README.md)
-
-## Demonstração concorrente pelo terminal
+A demonstração concorrente também pode ser executada isoladamente:
 
 ```bash
 uv run python scripts/demonstrar_concorrencia.py
 ```
 
-A mesma demonstração está disponível em **Evidências técnicas**. O resultado
-esperado é uma transação confirmada, uma rejeitada e somente uma escala válida.
+O resultado esperado é uma transação confirmada, uma rejeitada e uma única
+escala na combinação de destino.
+
+## Estrutura
+
+```text
+frontend/                     aplicação e páginas Streamlit
+src/projeto_hospital/orm/     mapeamentos e sessões SQLAlchemy
+src/projeto_hospital/services operações, consultas e transações
+src/projeto_hospital/ui/      componentes e acesso compartilhado a dados
+sql/                          schema, dados, consultas e objetos programáveis
+tests/                        validação SQL, ORM, concorrência e interface
+docs/modelagem/               DER, modelo relacional e normalização
+```
+
+## Documentação
+
+- [Requisitos oficiais](requisitos.md)
+- [Artefatos de modelagem](docs/modelagem/README.md)
+- [Relatório técnico da Etapa 2](docs/relatorio_etapa2.md)
+- [Relatório da auditoria](docs/relatorio_auditoria.md)
+
+A apresentação de 10 minutos, a publicação no GitHub e a paginação final do
+relatório são atividades externas e não podem ser comprovadas apenas pelo
+estado local do repositório.
