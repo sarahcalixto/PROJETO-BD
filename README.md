@@ -46,13 +46,40 @@ O arquivo `.env` é local e não deve ser versionado.
 - histórico do paciente, listagem e remoção protegida por faturamento;
 - atualização de convênio e tempo médio por residente;
 - consultas analíticas da Etapa 1;
-- reajuste transacional de escalas;
+- cadastro de escalas com atuações vigentes e visualização da ocupação do turno;
+- reajuste transacional de data e turno da escala, mantendo residente, unidade
+  e preceptor;
 - três views e três consultas ORM avançadas;
 - tempo médio de espera, auditoria e média real dos procedimentos;
 - comparação lazy/eager e concorrência pessimista com logs.
 
 A navegação usa somente conceitos do domínio: Visão geral, Atendimentos,
 Pacientes, Escalas, Consultas e estatísticas e Auditoria.
+
+## Como demonstrar
+
+Para cadastrar, abra **Escalas**, mantenha **Nova escala**, informe data e
+turno e selecione unidade, residente e preceptor. A página mostra a ocupação
+existente; se o residente já estiver escalado naquele dia e turno, o PostgreSQL
+rejeita a operação e a interface apresenta o conflito sem alterar os registros.
+
+Para apresentar o reajuste, abra **Escalas**, escolha a escala, compare a
+situação atual com o novo agendamento, informe data e turno e confirme. A
+operação mantém residente, unidade e preceptor e verifica automaticamente
+conflitos e vigência das atuações.
+
+Para demonstrar concorrência pela interface, abra **Auditoria**, selecione
+**Concorrência**, confirme a execução e use **Executar concorrência**. A mesma
+demonstração pode ser executada no terminal:
+
+```bash
+uv run python scripts/demonstrar_concorrencia.py
+```
+
+O resultado esperado é: T1 obtém o lock e confirma; T2 aguarda e é rejeitada
+com SQLSTATE `23505`; uma única escala permanece no destino; e os registros
+temporários são removidos. O lock pessimista é adquirido pela função armazenada
+e a constraint de unicidade do PostgreSQL garante o estado final.
 
 ## Scripts SQL
 
@@ -77,18 +104,14 @@ Com o PostgreSQL saudável, a suíte recria apenas o schema `public` de
 
 ```bash
 uv run pytest
+uv run pytest -q tests/test_servico_escalas.py
+uv run pytest -q tests/test_concorrencia.py
 uv run python -m compileall -q src frontend scripts tests
 git diff --check
 ```
 
-A demonstração concorrente também pode ser executada isoladamente:
-
-```bash
-uv run python scripts/demonstrar_concorrencia.py
-```
-
-O resultado esperado é uma transação confirmada, uma rejeitada e uma única
-escala na combinação de destino.
+A última validação completa, com PostgreSQL disponível, resultou em **126 testes
+aprovados**, sem falhas e sem testes ignorados.
 
 ## Estrutura
 
