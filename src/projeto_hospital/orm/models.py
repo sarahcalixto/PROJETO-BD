@@ -22,8 +22,10 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    func,
+    literal_column,
 )
-from sqlalchemy.dialects.postgresql import ENUM, JSONB
+from sqlalchemy.dialects.postgresql import ENUM, JSONB, ExcludeConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from projeto_hospital.orm.base import Base
@@ -111,10 +113,6 @@ class Profissional(Base):
 
 class AtuacaoProfissional(Base):
     __tablename__ = "atuacao_profissional"
-    __table_args__ = (
-        CheckConstraint("data_fim is null or data_fim >= data_inicio", name="atuacao_periodo_valido"),
-        UniqueConstraint("id", "tipo", name="atuacao_id_tipo_uq"),
-    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     id_profissional: Mapped[int] = mapped_column(ForeignKey("profissional.id", ondelete="CASCADE"))
@@ -125,6 +123,27 @@ class AtuacaoProfissional(Base):
     profissional: Mapped[Profissional] = relationship(back_populates="atuacoes")
     residente: Mapped[AtuacaoResidente | None] = relationship(back_populates="atuacao")
     preceptor: Mapped[AtuacaoPreceptor | None] = relationship(back_populates="atuacao")
+
+    __table_args__ = (
+        CheckConstraint(
+            "data_fim is null or data_fim >= data_inicio",
+            name="atuacao_periodo_valido",
+        ),
+        UniqueConstraint("id", "tipo", name="atuacao_id_tipo_uq"),
+        ExcludeConstraint(
+            (id_profissional, "="),
+            (
+                func.daterange(
+                    data_inicio,
+                    func.coalesce(data_fim, literal_column("'infinity'::date")),
+                    "[]",
+                ),
+                "&&",
+            ),
+            name="atuacao_profissional_periodo_excl",
+            using="gist",
+        ),
+    )
 
 
 class AtuacaoResidente(Base):
@@ -237,6 +256,13 @@ class Escala(Base):
             "data_plantao",
             "turno",
             "id_atuacao_residente",
+            name="escala_unidade_residente_uq",
+        ),
+        UniqueConstraint(
+            "data_plantao",
+            "turno",
+            "id_atuacao_residente",
+            name="escala_residente_turno_uq",
         ),
     )
 

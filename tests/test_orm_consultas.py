@@ -22,7 +22,7 @@ def test_ranking_residentes_por_atendimentos(orm_session: Session) -> None:
     resultados = ranking_residentes_por_atendimentos(orm_session)
 
     assert resultados[0].nome == "Narancia Ghirga"
-    assert resultados[0].total_atendimentos == 3
+    assert resultados[0].total_atendimentos == 4
     assert sum(resultado.total_atendimentos for resultado in resultados) == 10
 
 

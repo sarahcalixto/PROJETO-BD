@@ -117,8 +117,8 @@ def test_tempo_medio_duracao_por_atuacao_residente(
             atuacao_id: float(media) for atuacao_id, _, media in cur.fetchall()
         }
 
-    assert resultados[1] == pytest.approx(95 / 3)
+    assert resultados[1] == pytest.approx(150 / 4)
     assert resultados[2] == pytest.approx(42.5)
     assert resultados[3] == pytest.approx(37.5)
-    assert resultados[4] == pytest.approx(50)
-    assert resultados[5] == pytest.approx(35)
+    assert resultados[4] == pytest.approx(32.5)
+    assert 5 not in resultados

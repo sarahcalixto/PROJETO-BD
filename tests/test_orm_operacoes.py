@@ -145,10 +145,16 @@ def test_listar_procedimentos_distingue_vazio_de_inexistente(orm_session: Sessio
 
 
 def test_atualizar_convenio_paciente(orm_session: Session) -> None:
-    resultado = atualizar_convenio_paciente(orm_session, 1, "CONV-NOVO-ORM")
+    resultado = atualizar_convenio_paciente(orm_session, 1, "  CONV-NOVO-ORM  ")
     assert resultado.id_paciente == 1
     assert resultado.num_convenio == "CONV-NOVO-ORM"
     assert orm_session.get(Paciente, 1).num_convenio == "CONV-NOVO-ORM"
+
+    sem_convenio = atualizar_convenio_paciente(orm_session, 1, "   ")
+    assert sem_convenio.num_convenio is None
+
+    with pytest.raises(RegraNegocioViolada, match="deve ser textual"):
+        atualizar_convenio_paciente(orm_session, 1, 123)  # type: ignore[arg-type]
 
     with pytest.raises(EntidadeNaoEncontrada):
         atualizar_convenio_paciente(orm_session, 9999, "X")
@@ -176,8 +182,8 @@ def test_calcular_tempo_medio_por_residente(orm_session: Session) -> None:
         for resultado in resultados
     }
 
-    assert medias[1] == pytest.approx(95 / 3)
+    assert medias[1] == pytest.approx(150 / 4)
     assert medias[2] == pytest.approx(42.5)
     assert medias[3] == pytest.approx(37.5)
-    assert medias[4] == pytest.approx(50)
-    assert medias[5] == pytest.approx(35)
+    assert medias[4] == pytest.approx(32.5)
+    assert 5 not in medias

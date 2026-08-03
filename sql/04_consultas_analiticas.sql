@@ -1,6 +1,3 @@
--- Arquivo reservado para o integrante responsável.
--- Não implementar nesta branch.
-
 -- Utilizando LEFT JOIN para incluir dados como residentes com 0 atendimentos realizados
 -- e com 0 plantões 
 
@@ -77,5 +74,4 @@ WHERE NOT EXISTS (
         a.id_paciente = pac.id
         AND proc.nivel_risco = 'alto'
 );
-
 

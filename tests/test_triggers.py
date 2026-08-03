@@ -153,3 +153,105 @@ def test_media_do_procedimento_e_calculada_exatamente(
         / Decimal(len(tempos_anteriores) + 1)
     ).quantize(Decimal("0.01"))
     assert media == esperada
+
+
+def test_media_do_procedimento_permanece_consistente_em_update_e_delete(
+    conn: psycopg.Connection,
+) -> None:
+    residente, preceptor, unidade, _, paciente = _ids(conn)
+    procedimento = conn.execute(
+        "SELECT id FROM procedimento ORDER BY id LIMIT 1"
+    ).fetchone()[0]
+    inicio = datetime(2029, 12, 10, 10)
+    id_atendimento = conn.execute(
+        """
+        INSERT INTO atendimento (
+            data_hora, duracao_minutos, id_paciente,
+            id_atuacao_residente, id_atuacao_preceptor, id_unidade
+        ) VALUES (%s, 60, %s, %s, %s, %s)
+        RETURNING id
+        """,
+        (inicio, paciente, residente, preceptor, unidade),
+    ).fetchone()[0]
+    conn.execute(
+        """
+        INSERT INTO procedimento_realizado (
+            id_atendimento, id_procedimento, quantidade,
+            tempo_real_minutos, data_hora_inicio
+        ) VALUES (%s, %s, 1, 10, %s)
+        """,
+        (id_atendimento, procedimento, inicio),
+    )
+    conn.execute(
+        """
+        UPDATE procedimento_realizado
+        SET tempo_real_minutos = 20
+        WHERE id_atendimento = %s AND id_procedimento = %s
+        """,
+        (id_atendimento, procedimento),
+    )
+    conn.execute(
+        """
+        DELETE FROM procedimento_realizado
+        WHERE id_atendimento = %s AND id_procedimento = %s
+        """,
+        (id_atendimento, procedimento),
+    )
+
+    media = conn.execute(
+        """
+        SELECT media_tempo_procedimento
+        FROM procedimento
+        WHERE id = %s
+        """,
+        (procedimento,),
+    ).fetchone()[0]
+    esperada = conn.execute(
+        """
+        SELECT ROUND(AVG(tempo_real_minutos), 2)
+        FROM procedimento_realizado
+        WHERE id_procedimento = %s
+        """,
+        (procedimento,),
+    ).fetchone()[0]
+    assert media == esperada
+
+
+@pytest.mark.parametrize(
+    ("inicio_procedimento", "tempo_real"),
+    [
+        (datetime(2029, 12, 11, 9, 59), 10),
+        (datetime(2029, 12, 11, 10, 20), 20),
+    ],
+    ids=["antes-do-atendimento", "termino-apos-atendimento"],
+)
+def test_procedimento_direto_respeita_janela_do_atendimento(
+    conn: psycopg.Connection,
+    inicio_procedimento: datetime,
+    tempo_real: int,
+) -> None:
+    residente, preceptor, unidade, _, paciente = _ids(conn)
+    procedimento = conn.execute(
+        "SELECT id FROM procedimento ORDER BY id LIMIT 1"
+    ).fetchone()[0]
+    id_atendimento = conn.execute(
+        """
+        INSERT INTO atendimento (
+            data_hora, duracao_minutos, id_paciente,
+            id_atuacao_residente, id_atuacao_preceptor, id_unidade
+        ) VALUES ('2029-12-11 10:00', 30, %s, %s, %s, %s)
+        RETURNING id
+        """,
+        (paciente, residente, preceptor, unidade),
+    ).fetchone()[0]
+
+    with pytest.raises(psycopg.errors.CheckViolation):
+        conn.execute(
+            """
+            INSERT INTO procedimento_realizado (
+                id_atendimento, id_procedimento, quantidade,
+                tempo_real_minutos, data_hora_inicio
+            ) VALUES (%s, %s, 1, %s, %s)
+            """,
+            (id_atendimento, procedimento, tempo_real, inicio_procedimento),
+        )

@@ -176,8 +176,15 @@ def atualizar_convenio_paciente(session: Session, id_paciente: int, num_convenio
     paciente = session.get(Paciente, id_paciente)
     if paciente is None:
         raise EntidadeNaoEncontrada("Paciente", id_paciente)
+    if num_convenio is not None and not isinstance(num_convenio, str):
+        raise RegraNegocioViolada("O número de convênio deve ser textual")
 
-    paciente.num_convenio = num_convenio
+    convenio_normalizado = (
+        num_convenio.strip()
+        if isinstance(num_convenio, str) and num_convenio.strip()
+        else None
+    )
+    paciente.num_convenio = convenio_normalizado
     session.flush()
 
     return ConvenioPacienteDTO(paciente.id, paciente.num_convenio)
@@ -186,7 +193,14 @@ def atualizar_convenio_paciente(session: Session, id_paciente: int, num_convenio
 def remover_procedimento_nao_faturado(session: Session, id_atendimento: int, id_procedimento: int) -> ProcedimentoRemovidoDTO:
     chave = (id_atendimento, id_procedimento)
 
-    realizacao = session.get(ProcedimentoRealizado, chave)
+    realizacao = session.scalar(
+        select(ProcedimentoRealizado)
+        .where(
+            ProcedimentoRealizado.id_atendimento == id_atendimento,
+            ProcedimentoRealizado.id_procedimento == id_procedimento,
+        )
+        .with_for_update()
+    )
     if realizacao is None:
         raise EntidadeNaoEncontrada("Procedimento realizado", chave)
 

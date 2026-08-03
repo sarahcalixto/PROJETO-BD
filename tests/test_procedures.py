@@ -240,6 +240,16 @@ def test_registrar_atendimento_rejeita_procedimento_que_termina_depois(
         registrar_atendimento(conn, [procedimento])
 
 
+def test_registrar_atendimento_rejeita_procedimento_inicialmente_faturado(
+    conn: psycopg.Connection,
+) -> None:
+    procedimento = procedimento_json()
+    procedimento["faturado"] = True
+
+    with pytest.raises(psycopg.errors.CheckViolation):
+        registrar_atendimento(conn, [procedimento])
+
+
 def test_registrar_atendimento_rejeita_reenvio_exatamente_duplicado(
     conn: psycopg.Connection,
 ) -> None:
@@ -266,38 +276,6 @@ def test_registrar_atendimento_rejeita_reenvio_exatamente_duplicado(
             ATENDIMENTO_PADRAO,
         )
         assert cur.fetchone()[0] == 1
-
-
-def test_registrar_atendimento_rejeita_autossupervisao(
-    conn: psycopg.Connection,
-) -> None:
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT id_profissional FROM atuacao_profissional WHERE id = 1"
-        )
-        id_profissional = cur.fetchone()[0]
-        cur.execute(
-            """
-            INSERT INTO atuacao_profissional (
-                id_profissional, tipo, data_inicio, data_fim
-            ) VALUES (%s, 'preceptor', '2026-01-01', NULL)
-            RETURNING id
-            """,
-            (id_profissional,),
-        )
-        id_preceptor = cur.fetchone()[0]
-        cur.execute(
-            """
-            INSERT INTO atuacao_preceptor (id, tipo, titulacao)
-            VALUES (%s, 'preceptor', 'Doutor')
-            """,
-            (id_preceptor,),
-        )
-
-    atendimento = list(ATENDIMENTO_PADRAO)
-    atendimento[4] = id_preceptor
-    with pytest.raises(psycopg.errors.CheckViolation):
-        registrar_atendimento(conn, [procedimento_json()], tuple(atendimento))
 
 
 def test_tempo_medio_espera_usa_primeiro_procedimento_e_ignora_sem_procedimento(
@@ -349,7 +327,7 @@ def test_tempo_medio_espera_usa_primeiro_procedimento_e_ignora_sem_procedimento(
                 id_atendimento, id_procedimento, quantidade,
                 tempo_real_minutos, data_hora_inicio
             ) VALUES
-                (%s, 1, 1, 20, '2026-09-01 10:50:00'),
+                    (%s, 1, 1, 10, '2026-09-01 10:50:00'),
                 (%s, 2, 1, 20, '2026-09-01 10:20:00'),
                 (%s, 1, 1, 10, '2026-09-01 11:10:00')
             """,
@@ -372,7 +350,10 @@ def test_tempo_medio_espera_usa_primeiro_procedimento_e_ignora_sem_procedimento(
         "Unidade teste da media",
         Decimal("15.00"),
     )
-    assert id_unidade_sem_procedimento not in resultados
+    assert resultados[id_unidade_sem_procedimento] == (
+        "Unidade sem procedimento",
+        None,
+    )
 
 
 def inserir_escala(

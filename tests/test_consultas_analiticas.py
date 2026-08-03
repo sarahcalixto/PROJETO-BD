@@ -13,7 +13,7 @@ def test_ranking_residentes_por_atendimentos(
         cur.execute(query)
         rows = cur.fetchall()
 
-    assert rows[0] == ("Narancia Ghirga", 3)
+    assert rows[0] == ("Narancia Ghirga", 4)
     assert sum(total for _, total in rows) == 10
 
 

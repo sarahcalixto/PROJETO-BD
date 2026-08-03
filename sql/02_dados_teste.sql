@@ -10,7 +10,6 @@ BEGIN;
 -- 1..5   -> pacientes
 -- 6..10  -> residentes
 -- 11..15 -> preceptores
--- 16..19 -> preceptores adicionais (equipe do projeto)
 
 INSERT INTO pessoa (nome, cpf, data_nascimento, is_flamengo, telefone) VALUES
   ('Gon Freecss',          '10000000001', '1985-03-12', true,  '21988880001'),
@@ -27,11 +26,7 @@ INSERT INTO pessoa (nome, cpf, data_nascimento, is_flamengo, telefone) VALUES
   ('Chrollo Lucilfer',     '10000000012', '1970-10-03', true,  '21988880012'),
   ('Roy Mustang',          '10000000013', '1980-01-22', false, '21988880013'),
   ('Leone Abbacchio',      '10000000014', '1968-03-15', true,  '21988880014'),
-  ('Riza Hawkeye',         '10000000015', '1982-07-07', false, '21988880015'),
-  ('Samuel Santos Ismael da Costa',    '10000000016', '2000-04-11', true,  '21988880016'),
-  ('Ruan Campelo de Pontes',           '10000000017', '2000-06-23', true,  '21988880017'),
-  ('Sarah Fernanda Calixto de Araujo', '10000000018', '2000-09-02', true,  '21988880018'),
-  ('Ana Carolina de Sousa Camilo',     '10000000019', '2000-12-15', false, '21988880019');
+  ('Riza Hawkeye',         '10000000015', '1982-07-07', false, '21988880015');
 
 -- PACIENTE -----------------------------------------------------------------
 
@@ -68,16 +63,11 @@ INSERT INTO profissional (id, crm, data_admissao, especialidade) VALUES
   (12, 'CRM-RJ-100012', '2012-03-01', 'Cirurgia Geral'),
   (13, 'CRM-RJ-100013', '2018-03-01', 'Pediatria'),
   (14, 'CRM-RJ-100014', '2010-03-01', 'Ortopedia'),
-  (15, 'CRM-RJ-100015', '2016-03-01', 'Ginecologia'),
-  (16, 'CRM-RJ-100016', '2024-03-01', 'Cardiologia'),
-  (17, 'CRM-RJ-100017', '2024-03-01', 'Neurologia'),
-  (18, 'CRM-RJ-100018', '2024-03-01', 'Dermatologia'),
-  (19, 'CRM-RJ-100019', '2024-03-01', 'Urologista');
+  (15, 'CRM-RJ-100015', '2016-03-01', 'Ginecologia');
 
 -- ATUACAO_PROFISSIONAL ---------------------------------------------------
 -- 1..5   -> atuacoes de residente
 -- 6..10  -> atuacoes de preceptor
--- 11..14 -> atuacoes de preceptor
 -- data_inicio fica no passado e data_fim NULL para garantir vigencia
 
 INSERT INTO atuacao_profissional (id_profissional, tipo, data_inicio, data_fim) VALUES
@@ -90,11 +80,7 @@ INSERT INTO atuacao_profissional (id_profissional, tipo, data_inicio, data_fim) 
   (12, 'preceptor', '2012-03-01', NULL),
   (13, 'preceptor', '2018-03-01', NULL),
   (14, 'preceptor', '2010-03-01', NULL),
-  (15, 'preceptor', '2016-03-01', NULL),
-  (16, 'preceptor', '2024-03-01', NULL),
-  (17, 'preceptor', '2024-03-01', NULL),
-  (18, 'preceptor', '2024-03-01', NULL),
-  (19, 'preceptor', '2024-03-01', NULL);
+  (15, 'preceptor', '2016-03-01', NULL);
 
 INSERT INTO atuacao_residente (id, ano_residencia) VALUES
   (1, 'R3'),
@@ -108,11 +94,7 @@ INSERT INTO atuacao_preceptor (id, titulacao) VALUES
   (7,  'doutor'),
   (8,  'mestre'),
   (9,  'doutor'),
-  (10, 'mestre'),
-  (11, 'doutor'),
-  (12, 'doutor'),
-  (13, 'doutor'),
-  (14, 'doutor');
+  (10, 'mestre');
 
 -- UNIDADE ------------------------------------------------------------------
 
@@ -151,8 +133,8 @@ INSERT INTO atendimento (
   (date_trunc('month', CURRENT_DATE) + interval '3 day 09:30', 40, 1, 3, 6, 3),
   (date_trunc('month', CURRENT_DATE) + interval '4 day 08:00', 35, 2, 3, 6, 1),
   (date_trunc('month', CURRENT_DATE) + interval '4 day 09:00', 50, 3, 4, 6, 2),
-  (date_trunc('month', CURRENT_DATE) + interval '5 day 08:00', 15, 4, 5, 7, 3),
-  (date_trunc('month', CURRENT_DATE) + interval '5 day 09:00', 55, 5, 5, 8, 1);
+  (date_trunc('month', CURRENT_DATE) + interval '5 day 08:00', 15, 4, 4, 7, 3),
+  (date_trunc('month', CURRENT_DATE) + interval '5 day 09:00', 55, 5, 1, 8, 1);
 
 -- PROCEDIMENTO_REALIZADO ------------------------------------------------
 -- Um procedimento por atendimento

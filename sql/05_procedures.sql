@@ -251,6 +251,13 @@ BEGIN
                     USING ERRCODE = 'invalid_parameter_value';
         END;
 
+        IF v_faturado THEN
+            RAISE EXCEPTION
+                'O procedimento no item % deve iniciar como nao faturado.',
+                v_ordem
+                USING ERRCODE = 'check_violation';
+        END IF;
+
         IF NOT EXISTS (
             SELECT 1
             FROM procedimento
@@ -309,8 +316,8 @@ BEGIN
 END;
 $$;
 
--- calcula, para cada unidade com atendimentos elegiveis, a media em minutos
--- entre a chegada do paciente e o inicio do primeiro procedimento realizado
+-- Calcula, para cada unidade, a média em minutos entre a chegada do paciente
+-- e o início do primeiro procedimento. Unidades sem ocorrências retornam NULL.
 CREATE OR REPLACE FUNCTION sp_calcular_tempo_medio_espera()
 RETURNS TABLE (
     id_unidade unidade.id%TYPE,
@@ -326,23 +333,23 @@ AS $$
             MIN(pr.data_hora_inicio) AS data_hora_inicio
         FROM procedimento_realizado AS pr
         GROUP BY pr.id_atendimento
+    ),
+    esperas AS (
+        SELECT
+            a.id_unidade,
+            EXTRACT(EPOCH FROM (pp.data_hora_inicio - a.data_hora)) / 60
+                AS minutos
+        FROM atendimento AS a
+        JOIN primeiro_procedimento AS pp
+          ON pp.id_atendimento = a.id
     )
     SELECT
         u.id,
         u.nome,
-        ROUND(
-            AVG(
-                EXTRACT(
-                    EPOCH FROM (pp.data_hora_inicio - a.data_hora)
-                ) / 60
-            ),
-            2
-        ) AS tempo_medio_espera_minutos
-    FROM atendimento AS a
-    JOIN primeiro_procedimento AS pp
-      ON pp.id_atendimento = a.id
-    JOIN unidade AS u
-      ON u.id = a.id_unidade
+        ROUND(AVG(e.minutos), 2) AS tempo_medio_espera_minutos
+    FROM unidade AS u
+    LEFT JOIN esperas AS e
+      ON e.id_unidade = u.id
     GROUP BY u.id, u.nome
     ORDER BY u.id;
 $$;

@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
 ---
 
 create type grupo_sanguineo as enum ('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-');
@@ -62,9 +64,12 @@ create table atuacao_profissional (
   data_inicio date not null,
   data_fim date,
 
-  -- FIXME: can data_fim be null? dunno
   constraint atuacao_periodo_valido check (data_fim is null or data_fim >= data_inicio),
-  constraint atuacao_id_tipo_uq unique (id, tipo)
+  constraint atuacao_id_tipo_uq unique (id, tipo),
+  constraint atuacao_profissional_periodo_excl exclude using gist (
+    id_profissional with =,
+    daterange(data_inicio, coalesce(data_fim, 'infinity'::date), '[]') with &&
+  )
 );
 
 create table atuacao_residente (
@@ -131,7 +136,10 @@ create table escala (
   turno turno not null,
   id_atuacao_residente int not null references atuacao_residente(id),
   id_atuacao_preceptor int not null references atuacao_preceptor(id),
-  unique (id_unidade, data_plantao, turno, id_atuacao_residente)
+  constraint escala_unidade_residente_uq
+    unique (id_unidade, data_plantao, turno, id_atuacao_residente),
+  constraint escala_residente_turno_uq
+    unique (data_plantao, turno, id_atuacao_residente)
 );
 
 create table internacao (

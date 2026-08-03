@@ -18,6 +18,20 @@ from projeto_hospital.services.dtos import (
 from projeto_hospital.services.exceptions import RegraNegocioViolada
 
 
+TURNOS_VALIDOS = frozenset({"manha", "tarde", "noite"})
+
+
+def _validar_identificador(valor: object, campo: str) -> int:
+    """Rejeita IDs ausentes, booleanos e valores não positivos antes do banco."""
+    if (
+        not isinstance(valor, int)
+        or isinstance(valor, bool)
+        or valor <= 0
+    ):
+        raise RegraNegocioViolada(f"{campo} deve ser um identificador positivo")
+    return valor
+
+
 def registrar_atendimento_completo(
     session: Session,
     entrada: AtendimentoCompletoInput,
@@ -33,7 +47,15 @@ def registrar_atendimento_completo(
     if not entrada.procedimentos:
         raise RegraNegocioViolada("Informe pelo menos um procedimento")
 
-    ids = [item.id_procedimento for item in entrada.procedimentos]
+    _validar_identificador(entrada.id_paciente, "Paciente")
+    _validar_identificador(entrada.id_atuacao_residente, "Atuação residente")
+    _validar_identificador(entrada.id_atuacao_preceptor, "Atuação preceptora")
+    _validar_identificador(entrada.id_unidade, "Unidade")
+
+    ids = [
+        _validar_identificador(item.id_procedimento, f"Procedimento {posicao}")
+        for posicao, item in enumerate(entrada.procedimentos, start=1)
+    ]
     if len(ids) != len(set(ids)):
         raise RegraNegocioViolada("O mesmo procedimento não pode ser repetido")
 
@@ -73,6 +95,14 @@ def registrar_atendimento_completo(
             raise RegraNegocioViolada(
                 f"O procedimento {posicao} termina depois do atendimento"
             )
+        if item.faturado is not False:
+            raise RegraNegocioViolada(
+                f"O procedimento {posicao} deve iniciar como não faturado"
+            )
+        if item.observacao is not None and not isinstance(item.observacao, str):
+            raise RegraNegocioViolada(
+                f"A observação do procedimento {posicao} deve ser textual"
+            )
 
     procedimentos = [
         {
@@ -80,7 +110,11 @@ def registrar_atendimento_completo(
             "quantidade": item.quantidade,
             "tempo_real_minutos": item.tempo_real_minutos,
             "data_hora_inicio": item.data_hora_inicio.isoformat(sep=" "),
-            "observacao": item.observacao,
+            "observacao": (
+                item.observacao.strip()
+                if item.observacao is not None and item.observacao.strip()
+                else None
+            ),
             "faturado": item.faturado,
         }
         for item in entrada.procedimentos
@@ -122,7 +156,11 @@ def calcular_tempo_medio_espera(
         rotina.c.tempo_medio_espera_minutos,
     ).order_by(rotina.c.id_unidade)
     return [
-        TempoEsperaUnidadeDTO(int(id_unidade), unidade, Decimal(tempo))
+        TempoEsperaUnidadeDTO(
+            int(id_unidade),
+            unidade,
+            Decimal(tempo) if tempo is not None else None,
+        )
         for id_unidade, unidade, tempo in session.execute(statement)
     ]
 
@@ -136,6 +174,18 @@ def reajustar_escala(
     data_destino: date,
     turno_destino: str,
 ) -> ReajusteEscalaDTO:
+    _validar_identificador(id_atuacao_residente, "Atuação residente")
+    if not isinstance(data_origem, date) or isinstance(data_origem, datetime):
+        raise RegraNegocioViolada("Informe uma data de origem válida")
+    if not isinstance(data_destino, date) or isinstance(data_destino, datetime):
+        raise RegraNegocioViolada("Informe uma data de destino válida")
+    if turno_origem not in TURNOS_VALIDOS:
+        raise RegraNegocioViolada("Informe um turno de origem válido")
+    if turno_destino not in TURNOS_VALIDOS:
+        raise RegraNegocioViolada("Informe um turno de destino válido")
+    if data_origem == data_destino and turno_origem == turno_destino:
+        raise RegraNegocioViolada("Origem e destino da escala devem ser diferentes")
+
     quantidade = session.scalar(
         select(
             func.sp_reajustar_escala(

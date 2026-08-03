@@ -1,6 +1,3 @@
--- Arquivo reservado para o integrante responsável.
--- Não implementar nesta branch.
-
 -- 1° parte: 
 -- INSERÇÃO VALIDADA DE ATENDIMENTO
 -- Finalidade:
@@ -52,7 +49,6 @@ BEGIN
             USING ERRCODE = 'check_violation';
     END IF;
 
-    -- CORRIGIDO: id_pessoa -> id
     IF NOT EXISTS (
         SELECT 1
         FROM paciente
@@ -62,7 +58,6 @@ BEGIN
             USING ERRCODE = 'foreign_key_violation';
     END IF;
 
-    -- CORRIGIDO: id_atuacao -> id
     IF NOT EXISTS (
         SELECT 1
         FROM atuacao_residente
@@ -72,7 +67,6 @@ BEGIN
             USING ERRCODE = 'foreign_key_violation';
     END IF;
 
-    -- CORRIGIDO: id_atuacao -> id
     IF NOT EXISTS (
         SELECT 1
         FROM atuacao_preceptor
@@ -82,7 +76,6 @@ BEGIN
             USING ERRCODE = 'foreign_key_violation';
     END IF;
 
-    -- CORRIGIDO: id_unidade -> id
     IF NOT EXISTS (
         SELECT 1
         FROM unidade
@@ -92,7 +85,6 @@ BEGIN
             USING ERRCODE = 'foreign_key_violation';
     END IF;
 
-    -- CORRIGIDO: id_atuacao -> id
     IF NOT EXISTS (
         SELECT 1
         FROM atuacao_profissional
@@ -107,7 +99,6 @@ BEGIN
             USING ERRCODE = 'check_violation';
     END IF;
 
-    -- CORRIGIDO: id_atuacao -> id
     IF NOT EXISTS (
         SELECT 1
         FROM atuacao_profissional
@@ -122,7 +113,6 @@ BEGIN
             USING ERRCODE = 'check_violation';
     END IF;
 
-    -- CORRIGIDO: Inserindo no campo 'id'
     INSERT INTO atendimento (
         id,
         data_hora,
@@ -170,7 +160,7 @@ $$;
 --   SQL, ou use o mecanismo de parametro equivalente.
 
 SELECT
-    id AS id_atendimento, -- CORRIGIDO: No DDL a coluna é 'id'. Usamos ALIAS para manter a saída esperada
+    id AS id_atendimento,
     data_hora,
     duracao_minutos,
     id_paciente,
@@ -399,7 +389,6 @@ FROM (
       AND duracao_minutos > 0
     GROUP BY id_atuacao_residente
 ) AS medias
--- CORRIGIDO: Todas as junções agora usam a coluna física 'id'
 JOIN atuacao_residente
     ON atuacao_residente.id = medias.id_atuacao_residente
 JOIN atuacao_profissional
@@ -411,4 +400,3 @@ JOIN pessoa
 ORDER BY
     medias.tempo_medio_minutos DESC,
     pessoa.nome ASC;
-

@@ -124,10 +124,14 @@ def test_estatisticas_mensais_calcula_valores_e_desempata_por_nome(
         INSERT INTO procedimento_realizado (
             id_atendimento, id_procedimento, quantidade,
             tempo_real_minutos, data_hora_inicio
-        ) VALUES (%s, %s, 1, 20, %s), (%s, %s, 1, 40, %s)
+            ) VALUES
+                (%s, %s, 3, 15, %s),
+                (%s, %s, 2, 10, %s),
+                (%s, %s, 1, 35, %s)
         """,
         (
             ids_atendimentos[0][0], procedimentos[0][0], datetime(2029, 11, 5, 10, 5),
+            ids_atendimentos[0][0], procedimentos[1][0], datetime(2029, 11, 5, 10, 10),
             ids_atendimentos[1][0], procedimentos[1][0], datetime(2029, 11, 10, 14, 5),
         ),
     )

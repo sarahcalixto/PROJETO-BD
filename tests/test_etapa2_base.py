@@ -54,6 +54,62 @@ def test_schema_e_dados_da_etapa_2(conn: psycopg.Connection) -> None:
     assert internados == 2
 
 
+def test_atuacoes_do_mesmo_profissional_nao_podem_se_sobrepor(
+    conn: psycopg.Connection,
+) -> None:
+    with pytest.raises(psycopg.errors.ExclusionViolation):
+        conn.execute(
+            """
+            INSERT INTO atuacao_profissional (
+                id_profissional, tipo, data_inicio, data_fim
+            ) VALUES (6, 'preceptor', CURRENT_DATE, NULL)
+            """
+        )
+
+
+def test_atuacao_exige_exatamente_um_subtipo_compativel(
+    conn: psycopg.Connection,
+) -> None:
+    id_profissional = conn.execute(
+        """
+        INSERT INTO pessoa (nome, cpf, data_nascimento, is_flamengo, telefone)
+        VALUES ('Profissional sem subtipo', '79999999999', '1990-01-01', false, '81999999999')
+        RETURNING id
+        """
+    ).fetchone()[0]
+    conn.execute(
+        """
+        INSERT INTO profissional (id, crm, data_admissao, especialidade)
+        VALUES (%s, 'CRM-TESTE-799', CURRENT_DATE, 'Teste')
+        """,
+        (id_profissional,),
+    )
+    conn.execute(
+        """
+        INSERT INTO atuacao_profissional (
+            id_profissional, tipo, data_inicio, data_fim
+        ) VALUES (%s, 'residente', CURRENT_DATE, NULL)
+        """,
+        (id_profissional,),
+    )
+    with pytest.raises(psycopg.errors.CheckViolation):
+        conn.execute("SET CONSTRAINTS trg_valida_especializacao_atuacao IMMEDIATE")
+
+
+def test_escala_possui_unicidade_global_do_residente(
+    conn: psycopg.Connection,
+) -> None:
+    definicao = conn.execute(
+        """
+        SELECT pg_get_constraintdef(oid)
+        FROM pg_constraint
+        WHERE conname = 'escala_residente_turno_uq'
+        """
+    ).fetchone()
+    assert definicao is not None
+    assert "data_plantao, turno, id_atuacao_residente" in definicao[0]
+
+
 def test_paciente_nao_pode_ter_duas_internacoes_ativas(
     conn: psycopg.Connection,
 ) -> None:

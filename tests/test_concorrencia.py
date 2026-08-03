@@ -87,9 +87,8 @@ def test_duas_transacoes_confirmam_exatamente_uma_escala_conflitante(
     origem_segunda = date(2030, 6, 2)
     destino = date(2030, 6, 3)
 
-    # o teste cria duas origens validas do mesmo residente em unidades
-    # diferentes
-    # cada transacao tenta mover sua origem para o mesmo destino :X
+    # Duas origens válidas na mesma unidade disputam exatamente a mesma
+    # combinação de unidade, data, turno e residente no destino.
     with psycopg.connect(**kwargs) as setup:
         with setup.cursor() as cur:
             cur.execute(
@@ -107,7 +106,7 @@ def test_duas_transacoes_confirmam_exatamente_uma_escala_conflitante(
                     id_atuacao_residente, id_atuacao_preceptor
                 ) VALUES
                     (1, %s, 'manha', 1, 6),
-                    (2, %s, 'manha', 1, 6)
+                    (1, %s, 'manha', 1, 6)
                 RETURNING id
                 """,
                 (origem_primeira, origem_segunda),
@@ -254,7 +253,7 @@ def test_duas_transacoes_confirmam_exatamente_uma_escala_conflitante(
 
         assert estado_final == [
             (id_primeira, 1, destino, "tarde"),
-            (id_segunda, 2, origem_segunda, "manha"),
+            (id_segunda, 1, origem_segunda, "manha"),
         ]
         assert quantidade_no_destino == 1
         assert "transacao 2 esta bloqueada pela transacao 1" in caplog.messages

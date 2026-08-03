@@ -2,6 +2,37 @@
 -- Este arquivo preserva os registros existentes; os objetos programáveis são
 -- atualizados pelos scripts 05, 06 e 07 após esta migração estrutural.
 
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'atuacao_profissional_periodo_excl'
+    ) THEN
+        ALTER TABLE atuacao_profissional
+            ADD CONSTRAINT atuacao_profissional_periodo_excl
+            EXCLUDE USING gist (
+                id_profissional WITH =,
+                daterange(
+                    data_inicio,
+                    COALESCE(data_fim, 'infinity'::date),
+                    '[]'
+                ) WITH &&
+            );
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'escala_residente_turno_uq'
+    ) THEN
+        ALTER TABLE escala
+            ADD CONSTRAINT escala_residente_turno_uq
+            UNIQUE (data_plantao, turno, id_atuacao_residente);
+    END IF;
+END;
+$$;
+
 ALTER TABLE procedimento
     ADD COLUMN IF NOT EXISTS media_tempo_procedimento numeric(10, 2);
 

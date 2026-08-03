@@ -82,7 +82,7 @@ ContagemProcedimentos AS (
         b.mes,
         b.id_unidade,
         p.nome AS procedimento,
-        COUNT(pr.id_procedimento) AS qtd_realizado
+        SUM(pr.quantidade) AS qtd_realizado
     FROM BaseAtendimentos b
     JOIN procedimento_realizado pr ON b.id_atendimento = pr.id_atendimento
     JOIN procedimento p ON pr.id_procedimento = p.id

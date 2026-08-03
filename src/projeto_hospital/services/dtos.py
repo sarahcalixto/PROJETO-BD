@@ -143,7 +143,7 @@ class AtendimentoCompletoInput:
 class TempoEsperaUnidadeDTO:
     id_unidade: int
     unidade: str
-    tempo_medio_espera_minutos: Decimal
+    tempo_medio_espera_minutos: Decimal | None
 
 
 @dataclass(frozen=True, slots=True)

@@ -14,7 +14,6 @@ OBJETOS_ETAPA_2 = (
     "05_procedures.sql",
     "06_triggers.sql",
     "07_views.sql",
-    "09_dados_demonstracao_etapa2.sql",
 )
 
 

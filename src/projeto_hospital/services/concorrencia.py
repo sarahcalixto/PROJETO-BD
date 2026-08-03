@@ -57,12 +57,6 @@ def demonstrar_concorrencia_escala(
 ) -> ResultadoConcorrencia:
     """Executa duas transações, prova a espera e verifica o estado final."""
 
-    referencia = date.today() + timedelta(days=365)
-    origem_1 = referencia
-    origem_2 = referencia + timedelta(days=1)
-    destino = referencia + timedelta(days=2)
-    datas = (origem_1, origem_2, destino)
-
     with factory() as descoberta:
         id_residente = descoberta.scalar(
             select(AtuacaoResidente.id)
@@ -90,34 +84,46 @@ def demonstrar_concorrencia_escala(
             .order_by(AtuacaoPreceptor.id)
             .limit(1)
         )
-        unidades = descoberta.scalars(
-            select(Unidade.id).order_by(Unidade.id).limit(2)
-        ).all()
-    if id_residente is None or id_preceptor is None or len(unidades) < 2:
-        raise RuntimeError("Não há residente, preceptor e duas unidades vigentes")
+        id_unidade = descoberta.scalar(select(Unidade.id).order_by(Unidade.id).limit(1))
+
+        referencia = date.today() + timedelta(days=365)
+        for deslocamento in range(366):
+            origem_1 = referencia + timedelta(days=deslocamento * 3)
+            origem_2 = origem_1 + timedelta(days=1)
+            destino = origem_1 + timedelta(days=2)
+            datas = (origem_1, origem_2, destino)
+            ocupadas = descoberta.scalar(
+                select(func.count(Escala.id)).where(
+                    Escala.id_atuacao_residente == id_residente,
+                    Escala.data_plantao.in_(datas),
+                )
+            )
+            if not ocupadas:
+                break
+        else:
+            raise RuntimeError("Não foi encontrada uma janela livre para a demonstração")
+
+    if id_residente is None or id_preceptor is None or id_unidade is None:
+        raise RuntimeError("Não há residente, preceptor e unidade vigentes")
 
     with factory.begin() as setup:
-        setup.execute(
-            delete(Escala).where(
-                Escala.id_atuacao_residente == id_residente,
-                Escala.data_plantao.in_(datas),
-            )
-        )
         primeira = Escala(
-            id_unidade=unidades[0],
+            id_unidade=id_unidade,
             data_plantao=origem_1,
             turno="manha",
             id_atuacao_residente=id_residente,
             id_atuacao_preceptor=id_preceptor,
         )
         segunda = Escala(
-            id_unidade=unidades[1],
+            id_unidade=id_unidade,
             data_plantao=origem_2,
             turno="manha",
             id_atuacao_residente=id_residente,
             id_atuacao_preceptor=id_preceptor,
         )
         setup.add_all((primeira, segunda))
+        setup.flush()
+        ids_temporarios = (primeira.id, segunda.id)
 
     primeira_atualizou = Event()
     liberar_commit = Event()
@@ -187,16 +193,14 @@ def demonstrar_concorrencia_escala(
         quantidade_destino = verificacao.scalar(
             select(func.count(Escala.id)).where(
                 Escala.id_atuacao_residente == id_residente,
+                Escala.id_unidade == id_unidade,
                 Escala.data_plantao == destino,
                 Escala.turno == "tarde",
             )
         )
     with factory.begin() as limpeza:
         limpeza.execute(
-            delete(Escala).where(
-                Escala.id_atuacao_residente == id_residente,
-                Escala.data_plantao.in_(datas),
-            )
+            delete(Escala).where(Escala.id.in_(ids_temporarios))
         )
 
     logs = tuple(mensagens.get_nowait() for _ in range(mensagens.qsize()))

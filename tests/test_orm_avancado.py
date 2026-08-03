@@ -55,11 +55,13 @@ def test_percentual_alto_risco_inclui_residente_com_zero(
         item.id_atuacao_residente: item
         for item in percentual_alto_risco_por_residente(orm_session)
     }
-    assert resultados[1].total_procedimentos == 3
+    assert resultados[1].total_procedimentos == 4
     assert resultados[1].procedimentos_alto_risco == 0
     assert resultados[1].percentual_alto_risco == Decimal("0.00")
     assert resultados[2].total_procedimentos == 2
     assert resultados[2].procedimentos_alto_risco == 1
     assert resultados[2].percentual_alto_risco == Decimal("50.00")
 
-    assert resultados[5].total_procedimentos == 2
+    assert resultados[5].total_procedimentos == 0
+    assert resultados[5].procedimentos_alto_risco == 0
+    assert resultados[5].percentual_alto_risco == Decimal("0.00")
