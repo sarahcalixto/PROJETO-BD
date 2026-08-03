@@ -2,61 +2,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+import logging
+from collections.abc import Sequence
 
-import psycopg
 import streamlit as st
-from sqlalchemy.exc import SQLAlchemyError
 
 from projeto_hospital.services import ServicoORMError
 
 
-def aplicar_estilos() -> None:
-    """Aplica somente ajustes que complementam o tema nativo do Streamlit."""
-    st.html(
-        """
-        <style>
-        [data-testid="stMainBlockContainer"] {
-            max-width: 1480px;
-            padding-top: 2rem;
-            padding-bottom: 3rem;
-        }
+LOGGER = logging.getLogger(__name__)
 
-        [data-testid="stSidebar"] {
-            border-right: 1px solid rgba(15, 118, 110, 0.14);
-        }
-
-        [data-testid="stSidebar"][aria-expanded="true"] [data-testid="stLogoLink"] {
-            height: 4.5rem;
-            align-items: center;
-        }
-
-        [data-testid="stSidebar"][aria-expanded="true"] [data-testid="stSidebarLogo"] {
-            width: 15rem !important;
-            height: auto !important;
-            max-width: 100% !important;
-            max-height: 3.75rem !important;
-        }
-
-        div[data-testid="stForm"],
-        div[data-testid="stExpander"] {
-            border-color: rgba(15, 118, 110, 0.16);
-        }
-
-        @media (max-width: 640px) {
-            [data-testid="stMainBlockContainer"] {
-                padding-left: 1rem;
-                padding-right: 1rem;
-                padding-top: 1.25rem;
-            }
-
-            [data-testid="stSidebar"][aria-expanded="true"] [data-testid="stSidebarLogo"] {
-                width: 13.5rem !important;
-            }
-        }
-        </style>
-        """
-    )
+MENSAGENS_SQLSTATE = {
+    "23502": "Preencha todos os dados obrigatórios.",
+    "23503": "Um dos registros selecionados não existe mais.",
+    "23505": "Já existe um registro com os mesmos dados.",
+    "23514": "Os dados informados não atendem às regras do sistema.",
+    "40001": "Os dados foram alterados por outra operação. Tente novamente.",
+    "40P01": "Houve um conflito entre operações simultâneas. Tente novamente.",
+}
 
 
 def cabecalho_pagina(categoria: str, titulo: str, descricao: str) -> None:
@@ -83,23 +46,15 @@ def mostrar_erro_banco(
     exc: Exception,
     mensagem: str = "Não foi possível carregar os dados desta página.",
 ) -> None:
-    """Apresenta uma mensagem amigável e mantém o detalhe técnico acessível."""
+    """Apresenta erro padronizado sem expor SQL, chaves ou detalhes internos."""
     origem = getattr(exc, "orig", exc)
-    diagnostico = getattr(origem, "diag", None)
-    detalhe = (
-        str(exc)
-        if isinstance(exc, ServicoORMError)
-        else getattr(diagnostico, "message_primary", None)
-    )
+    sqlstate = getattr(origem, "sqlstate", None)
+    detalhe = str(exc) if isinstance(exc, ServicoORMError) else None
+    if detalhe is None:
+        detalhe = MENSAGENS_SQLSTATE.get(sqlstate)
     texto = f"{mensagem} {detalhe}" if detalhe else mensagem
+    LOGGER.error(
+        "Falha tratada na interface",
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
     st.error(texto, icon=":material/error:")
-    with st.expander("Ver detalhes técnicos", icon=":material/code:"):
-        st.code(str(exc), language=None)
-
-
-def executar_pagina(pagina: Callable[[], None]) -> None:
-    """Isola erros de leitura sem esconder falhas de programação."""
-    try:
-        pagina()
-    except (psycopg.Error, SQLAlchemyError, ServicoORMError) as exc:
-        mostrar_erro_banco(exc)

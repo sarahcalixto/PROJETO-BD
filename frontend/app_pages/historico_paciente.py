@@ -1,4 +1,0 @@
-from projeto_hospital.ui.components import executar_pagina
-from projeto_hospital.ui.pages import pagina_atendimentos_paciente
-
-executar_pagina(pagina_atendimentos_paciente)

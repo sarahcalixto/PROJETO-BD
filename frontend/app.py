@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
 
@@ -9,18 +10,19 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from projeto_hospital.ui.components import aplicar_estilos, cabecalho_pagina
-from projeto_hospital.ui.data import validar_banco_etapa2
-from projeto_hospital.ui.pages import criar_navegacao
+from projeto_hospital.ui.components import cabecalho_pagina
+from projeto_hospital.ui.data import validar_banco
+
+
+LOGGER = logging.getLogger(__name__)
 
 st.set_page_config(
     page_title="Hospital Dra. Yuska Maritan Brito",
-    page_icon="🏥",
+    page_icon=":material/local_hospital:",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-aplicar_estilos()
 st.logo(
     Path(__file__).parent / "assets" / "hospital-logo.svg",
     size="large",
@@ -28,26 +30,72 @@ st.logo(
 )
 
 try:
-    validar_banco_etapa2()
+    validar_banco()
 except Exception as exc:  # noqa: BLE001
+    LOGGER.error(
+        "Falha ao validar a disponibilidade do banco",
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
     with st.sidebar:
-        st.badge("Banco desconectado", icon=":material/database_off:", color="red")
+        st.badge("Sistema indisponível", icon=":material/cloud_off:", color="red")
     cabecalho_pagina(
         "Conexão",
         "Banco de dados indisponível",
-        "O painel não conseguiu acessar o PostgreSQL configurado.",
+        "O painel não conseguiu acessar os dados necessários.",
     )
     st.error(
-        "Verifique o PostgreSQL, o arquivo `.env` e execute "
-        "`uv run python scripts/preparar_banco.py`.",
+        "Tente novamente em alguns instantes. Se o problema continuar, "
+        "entre em contato com o suporte.",
         icon=":material/error:",
     )
-    with st.expander("Ver detalhes técnicos", icon=":material/code:"):
-        st.code(str(exc), language=None)
     st.stop()
 
 with st.sidebar:
-    st.badge("Banco conectado", icon=":material/database:", color="green")
-    st.caption("SQLAlchemy + PostgreSQL")
+    st.badge("Sistema disponível", icon=":material/cloud_done:", color="green")
+    st.caption("Dados operacionais atualizados")
 
-criar_navegacao().run()
+PAGES_DIR = Path(__file__).parent / "app_pages"
+pagina = st.navigation(
+    {
+        "": [
+            st.Page(
+                PAGES_DIR / "visao_geral.py",
+                title="Visão geral",
+                icon=":material/dashboard:",
+                default=True,
+            )
+        ],
+        "Operações": [
+            st.Page(
+                PAGES_DIR / "atendimentos.py",
+                title="Atendimentos",
+                icon=":material/clinical_notes:",
+            ),
+            st.Page(
+                PAGES_DIR / "pacientes.py",
+                title="Pacientes",
+                icon=":material/patient_list:",
+            ),
+            st.Page(
+                PAGES_DIR / "escalas.py",
+                title="Escalas",
+                icon=":material/calendar_month:",
+            ),
+        ],
+        "Análise": [
+            st.Page(
+                PAGES_DIR / "consultas_estatisticas.py",
+                title="Consultas e estatísticas",
+                icon=":material/query_stats:",
+            ),
+            st.Page(
+                PAGES_DIR / "auditoria.py",
+                title="Auditoria",
+                icon=":material/fact_check:",
+            ),
+        ],
+    },
+    position="sidebar",
+    expanded=True,
+)
+pagina.run()

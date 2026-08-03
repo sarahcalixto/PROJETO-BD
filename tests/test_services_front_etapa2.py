@@ -55,12 +55,23 @@ def test_atendimento_completo_valida_itens_antes_do_banco(
 @pytest.mark.parametrize(
     "alteracao",
     [
+        {"id_procedimento": 0},
         {"quantidade": 0},
         {"tempo_real_minutos": 0},
         {"data_hora_inicio": datetime(2026, 8, 20, 8, 59)},
         {"data_hora_inicio": datetime(2026, 8, 20, 9, 30), "tempo_real_minutos": 20},
+        {"faturado": True},
+        {"observacao": 123},
     ],
-    ids=["quantidade", "tempo", "inicio-anterior", "termino-posterior"],
+    ids=[
+        "id-procedimento",
+        "quantidade",
+        "tempo",
+        "inicio-anterior",
+        "termino-posterior",
+        "faturado",
+        "observacao",
+    ],
 )
 def test_atendimento_completo_valida_campos_e_janela_antes_do_banco(
     orm_session: Session,
@@ -86,6 +97,26 @@ def test_atendimento_completo_rejeita_duracao_fora_do_limite(
                 orm_session,
                 replace(entrada, duracao_minutos=duracao),
             )
+
+
+@pytest.mark.parametrize(
+    "campo",
+    [
+        "id_paciente",
+        "id_atuacao_residente",
+        "id_atuacao_preceptor",
+        "id_unidade",
+    ],
+)
+def test_atendimento_completo_rejeita_identificador_invalido(
+    orm_session: Session,
+    campo: str,
+) -> None:
+    with pytest.raises(RegraNegocioViolada):
+        registrar_atendimento_completo(
+            orm_session,
+            replace(_entrada(1), **{campo: 0}),
+        )
 
 
 def test_media_espera_e_medicao_de_loading(

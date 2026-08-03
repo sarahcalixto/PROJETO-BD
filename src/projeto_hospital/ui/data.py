@@ -43,8 +43,8 @@ def get_session_factory() -> sessionmaker[Session]:
     return create_session_factory(get_engine())
 
 
-def validar_banco_etapa2() -> None:
-    """Falha cedo quando o banco ainda não recebeu a migração final."""
+def validar_banco() -> None:
+    """Falha cedo quando o banco ainda não recebeu o contrato completo."""
 
     with get_engine().connect() as connection:
         pronto = connection.execute(
@@ -63,7 +63,7 @@ def validar_banco_etapa2() -> None:
         ).scalar_one()
     if not pronto:
         raise RuntimeError(
-            "O banco ainda não está preparado para a Etapa 2. "
+            "O banco ainda não está preparado. "
             "Execute: uv run python scripts/preparar_banco.py"
         )
 

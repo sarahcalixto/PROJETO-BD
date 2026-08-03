@@ -1,4 +1,0 @@
-from projeto_hospital.ui.components import executar_pagina
-from projeto_hospital.ui.stage2 import pagina_reajustar_escala
-
-executar_pagina(pagina_reajustar_escala)
