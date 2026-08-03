@@ -58,32 +58,6 @@ def demonstrar_concorrencia_escala(
     """Executa duas transações, prova a espera e verifica o estado final."""
 
     with factory() as descoberta:
-        id_residente = descoberta.scalar(
-            select(AtuacaoResidente.id)
-            .join(AtuacaoProfissional)
-            .where(
-                AtuacaoProfissional.data_inicio <= destino,
-                (
-                    AtuacaoProfissional.data_fim.is_(None)
-                    | (AtuacaoProfissional.data_fim >= destino)
-                ),
-            )
-            .order_by(AtuacaoResidente.id)
-            .limit(1)
-        )
-        id_preceptor = descoberta.scalar(
-            select(AtuacaoPreceptor.id)
-            .join(AtuacaoProfissional)
-            .where(
-                AtuacaoProfissional.data_inicio <= destino,
-                (
-                    AtuacaoProfissional.data_fim.is_(None)
-                    | (AtuacaoProfissional.data_fim >= destino)
-                ),
-            )
-            .order_by(AtuacaoPreceptor.id)
-            .limit(1)
-        )
         id_unidade = descoberta.scalar(select(Unidade.id).order_by(Unidade.id).limit(1))
 
         referencia = date.today() + timedelta(days=365)
@@ -91,6 +65,35 @@ def demonstrar_concorrencia_escala(
             origem_1 = referencia + timedelta(days=deslocamento * 3)
             origem_2 = origem_1 + timedelta(days=1)
             destino = origem_1 + timedelta(days=2)
+            id_residente = descoberta.scalar(
+                select(AtuacaoResidente.id)
+                .join(AtuacaoProfissional)
+                .where(
+                    AtuacaoProfissional.data_inicio <= destino,
+                    (
+                        AtuacaoProfissional.data_fim.is_(None)
+                        | (AtuacaoProfissional.data_fim >= destino)
+                    ),
+                )
+                .order_by(AtuacaoResidente.id)
+                .limit(1)
+            )
+            id_preceptor = descoberta.scalar(
+                select(AtuacaoPreceptor.id)
+                .join(AtuacaoProfissional)
+                .where(
+                    AtuacaoProfissional.data_inicio <= destino,
+                    (
+                        AtuacaoProfissional.data_fim.is_(None)
+                        | (AtuacaoProfissional.data_fim >= destino)
+                    ),
+                )
+                .order_by(AtuacaoPreceptor.id)
+                .limit(1)
+            )
+            if id_residente is None or id_preceptor is None:
+                continue
+
             datas = (origem_1, origem_2, destino)
             ocupadas = descoberta.scalar(
                 select(func.count(Escala.id)).where(

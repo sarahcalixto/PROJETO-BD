@@ -8,8 +8,15 @@ from time import monotonic
 
 import psycopg
 import pytest
+from sqlalchemy import func, select
 
 from projeto_hospital.config import DatabaseConfig
+from projeto_hospital.orm import (
+    Escala,
+    create_database_engine,
+    create_session_factory,
+)
+from projeto_hospital.services.concorrencia import demonstrar_concorrencia_escala
 
 
 LOGGER = logging.getLogger(__name__)
@@ -267,3 +274,27 @@ def test_duas_transacoes_confirmam_exatamente_uma_escala_conflitante(
                     "DELETE FROM escala WHERE id IN (%s, %s)",
                     (id_primeira, id_segunda),
                 )
+
+
+def test_servico_usado_pela_interface_executa_e_remove_dados_temporarios(
+    _prepared_database: DatabaseConfig,
+) -> None:
+    engine = create_database_engine(_prepared_database)
+    factory = create_session_factory(engine)
+    try:
+        with factory() as session:
+            quantidade_antes = session.scalar(select(func.count(Escala.id)))
+
+        resultado = demonstrar_concorrencia_escala(factory)
+
+        with factory() as session:
+            quantidade_depois = session.scalar(select(func.count(Escala.id)))
+    finally:
+        engine.dispose()
+
+    assert resultado.segunda_aguardou_lock is True
+    assert resultado.confirmadas == 1
+    assert resultado.rejeitadas == 1
+    assert resultado.escalas_no_destino == 1
+    assert quantidade_depois == quantidade_antes
+    assert "T2 aguardou o lock de T1" in resultado.logs
